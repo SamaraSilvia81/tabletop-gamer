@@ -1,0 +1,9 @@
+# variáveis de ambiente (segredos)
+.env
+.env.*
+
+# dependências e sistema
+supabase-setup.sql
+node_modules/
+.vercel/
+.DS_Store

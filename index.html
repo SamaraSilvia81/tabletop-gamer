@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>TableTop — Game Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,400;1,700&family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Unbounded:wght@700;800&family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+
+<!-- Padrão: Prateleira de Jogos -->
+<body data-theme="prateleira">
+
+<!-- ═══ SPLASH SCREEN ═══ -->
+<div id="splash">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 28px;">
+    <div class="splash-mark">TT</div>
+    <div class="splash-title">Table<em>Top</em></div>
+    <div class="splash-sub">Registre pontos, acompanhe partidas<br>e saiba quem realmente manda.</div>
+    <div style="margin-top:40px;width:100%;max-width:320px;">
+      <button class="btn-splash-start" onclick="enterApp()">
+        Começar a jogar <span class="arrow">→</span>
+      </button>
+      <button class="btn btn-block btn-round" onclick="loginWithGoogle()" style="background:#fff;color:#333;border:1.5px solid var(--border);box-shadow:var(--card-shadow-sm);gap:10px;font-weight:600;padding:13px 20px;margin-top:10px;width:100%;">
+        <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Entrar com Google
+      </button>
+      <div class="splash-version" style="margin-top:12px;">TableTop v7 · Dados salvos localmente ou na nuvem</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ APP ═══ -->
+
+<header class="top-bar" id="top-bar">
+  <div class="logo">
+    <div class="logo-mark">TT</div>
+    Table<em>Top</em>
+  </div>
+  <div class="topbar-right">
+    <button class="icon-btn" id="music-toggle-btn" onclick="openMusicModal()" title="Música ambiente"><i class="ph ph-music-notes"></i></button>
+  </div>
+</header>
+
+<main class="app-main">
+  <section id="view-library" class="view active">
+    <div class="section-header">
+      <h2 class="section-title">Meus Jogos</h2>
+      <p class="section-sub">Toque em um jogo para iniciar uma partida</p>
+    </div>
+    <div id="game-list" class="game-list"></div>
+    <div id="empty-library" class="empty-state">
+      <div class="empty-icon"><i class="ph ph-cards-three" style="font-size:3rem;"></i></div>
+      <p class="empty-text">Nenhum jogo cadastrado ainda.<br>Toque no <strong>＋</strong> para criar o primeiro!</p>
+    </div>
+  </section>
+
+  <section id="view-play" class="view">
+    <div id="play-empty" class="empty-state">
+      <div class="empty-icon"><i class="ph ph-game-controller" style="font-size:3rem;"></i></div>
+      <p class="empty-text">Selecione um jogo na<br>biblioteca para jogar!</p>
+    </div>
+    <div id="play-content" style="display:none;"></div>
+  </section>
+
+  <section id="view-history" class="view">
+    <div class="section-header">
+      <h2 class="section-title">Histórico</h2>
+      <p class="section-sub">Partidas encerradas</p>
+    </div>
+    <div id="history-list"></div>
+    <div id="empty-history" class="empty-state">
+      <div class="empty-icon"><i class="ph ph-book-open" style="font-size:3rem;"></i></div>
+      <p class="empty-text">Nenhuma partida ainda.<br>Conclua um jogo para ver o histórico!</p>
+    </div>
+  </section>
+
+  <!-- ═══ SETTINGS VIEW ═══ -->
+  <section id="view-settings" class="view">
+    <div class="section-header">
+      <h2 class="section-title">Configurações</h2>
+      <p class="section-sub">Personalize sua experiência</p>
+    </div>
+
+    <!-- Account / Login -->
+    <div class="card card-primary" id="auth-card">
+      <div class="card-title"><i class="ph ph-user-circle" style="font-size:1rem;"></i> Conta</div>
+      <div id="auth-content">
+        <p style="font-size:0.84rem;color:var(--text-2);line-height:1.6;margin-bottom:14px;">
+          Entre com sua conta Google para sincronizar jogos e configurações entre dispositivos.
+        </p>
+        <button class="btn btn-block btn-round" onclick="loginWithGoogle()" style="background:#fff;color:#333;border:1.5px solid var(--border);box-shadow:var(--card-shadow-sm);gap:10px;font-weight:600;padding:13px 20px;">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          Entrar com Google
+        </button>
+        <div class="divider"></div>
+        <p style="font-size:0.72rem;color:var(--text-3);text-align:center;">
+          Ou entre com e-mail e senha
+        </p>
+        <div class="form-group" style="margin-top:10px;">
+          <label class="form-label">E-mail</label>
+          <input type="email" class="form-input" id="auth-email" placeholder="seu@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Senha</label>
+          <input type="password" class="form-input" id="auth-password" placeholder="••••••••">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-round" style="flex:1;" onclick="authAction('login')">
+            <i class="ph ph-sign-in"></i> Entrar
+          </button>
+          <button class="btn btn-ghost btn-round" style="flex:1;" onclick="authAction('signup')">
+            <i class="ph ph-user-plus"></i> Criar conta
+          </button>
+        </div>
+      </div>
+      <div id="auth-logged" style="display:none;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+          <div id="auth-avatar" style="width:42px;height:42px;border-radius:50%;background:var(--primary);border:2px solid var(--text);display:grid;place-items:center;overflow:hidden;">
+            <i class="ph ph-user" style="font-size:1.2rem;color:var(--text);"></i>
+          </div>
+          <div>
+            <div style="font-weight:700;color:var(--text);font-size:0.9rem;" id="auth-user-email"></div>
+            <div style="font-size:0.7rem;color:var(--text-3);">Conta sincronizada</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-round btn-block" onclick="authAction('logout')">
+          <i class="ph ph-sign-out"></i> Sair
+        </button>
+      </div>
+    </div>
+
+    <!-- Theme picker (moved here) -->
+    <div class="card">
+      <div class="card-title"><i class="ph ph-palette" style="font-size:1rem;"></i> Tema visual</div>
+      <p style="font-size:0.82rem;color:var(--text-2);margin-bottom:14px;line-height:1.5;">
+        Troque a estética quando quiser — sua biblioteca e histórico ficam intactos.
+      </p>
+      <div class="theme-grid" id="settings-theme-grid"></div>
+    </div>
+
+    <!-- Texture toggle -->
+    <div class="card">
+      <div class="card-title"><i class="ph ph-paint-roller" style="font-size:1rem;"></i> Textura</div>
+      <div class="flex-between" style="padding:4px 0;">
+        <div>
+          <div style="font-size:0.88rem;font-weight:600;color:var(--text);">Grão de papel</div>
+          <div style="font-size:0.72rem;color:var(--text-3);">Efeito retro impresso sobre o fundo</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="grain-toggle" checked onchange="toggleGrain(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Data -->
+    <div class="card">
+      <div class="card-title"><i class="ph ph-database" style="font-size:1rem;"></i> Dados</div>
+      <button class="btn btn-ghost btn-round btn-block" onclick="exportData()" style="margin-bottom:8px;">
+        <i class="ph ph-download-simple"></i> Exportar dados (JSON)
+      </button>
+      <button class="btn btn-danger btn-round btn-block" onclick="clearAllData()">
+        <i class="ph ph-trash"></i> Limpar todos os dados
+      </button>
+    </div>
+
+    <div style="text-align:center;padding:20px 0;font-size:0.68rem;color:var(--text-3);">
+      TableTop v6 · feito com <i class="ph ph-heart" style="color:var(--accent);"></i>
+    </div>
+  </section>
+</main>
+
+<button class="fab" id="fab-btn" onclick="openSetup()"><i class="ph ph-plus" style="font-size:1.4rem;"></i></button>
+
+<nav class="bottom-nav">
+  <button class="nav-item active" data-view="library" onclick="navTo('library')">
+    <div class="nav-icon"><i class="ph ph-cards-three"></i></div>Jogos
+  </button>
+  <button class="nav-item" data-view="play" onclick="navTo('play')">
+    <div class="nav-icon"><i class="ph ph-game-controller"></i></div>Partida
+  </button>
+  <button class="nav-item" data-view="history" onclick="navTo('history')">
+    <div class="nav-icon"><i class="ph ph-clock-counter-clockwise"></i></div>Histórico
+  </button>
+  <button class="nav-item" data-view="settings" onclick="navTo('settings')">
+    <div class="nav-icon"><i class="ph ph-gear-six"></i></div>Config
+  </button>
+</nav>
+
+<!-- Theme modal removed — now in Settings tab -->
+
+<!-- ═══ SETUP MODAL ═══ -->
+<div id="setup-modal" class="modal-overlay">
+  <div class="modal-header">
+    <button class="modal-back" onclick="closeSetup()">← Voltar</button>
+    <span class="modal-title" id="setup-modal-title">Novo Jogo</span>
+    <button class="modal-save" onclick="saveGame()">Salvar</button>
+  </div>
+  <div class="modal-body">
+
+    <div class="form-group">
+      <label class="form-label">Ícone</label>
+      <div class="emoji-grid" id="emoji-grid"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Nome do Jogo</label>
+      <input type="text" class="form-input" id="setup-name" placeholder="Ex: Truco, UNO, Catan...">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Imagem de fundo (hero)</label>
+      <div class="wallpaper-preview" id="wp-preview">
+        <div class="wp-label"><i class="ph ph-image" style="font-size:1.2rem;"></i> Sem imagem</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input type="text" class="form-input" id="setup-wallpaper" placeholder="URL da imagem..." style="font-size:0.82rem;" oninput="previewWallpaper()">
+        <label style="flex-shrink:0;">
+          <input type="file" accept="image/*" id="wp-file-input" style="display:none" onchange="handleWallpaperFile(event)">
+          <span class="btn btn-ghost btn-sm" style="cursor:pointer;" onclick="document.getElementById('wp-file-input').click()"><i class="ph ph-upload-simple"></i></span>
+        </label>
+      </div>
+      <!-- Image positioning controls -->
+      <div id="wp-position-controls" style="display:none;">
+        <label class="form-label">Posição e zoom</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <div style="flex:1;min-width:100px;">
+            <div style="font-size:0.65rem;color:var(--text-3);margin-bottom:3px;">Horizontal</div>
+            <input type="range" id="wp-pos-x" min="0" max="100" value="50" style="width:100%;" oninput="updateWpPosition()">
+          </div>
+          <div style="flex:1;min-width:100px;">
+            <div style="font-size:0.65rem;color:var(--text-3);margin-bottom:3px;">Vertical</div>
+            <input type="range" id="wp-pos-y" min="0" max="100" value="50" style="width:100%;" oninput="updateWpPosition()">
+          </div>
+          <div style="flex:1;min-width:100px;">
+            <div style="font-size:0.65rem;color:var(--text-3);margin-bottom:3px;">Zoom</div>
+            <input type="range" id="wp-zoom" min="100" max="250" value="100" style="width:100%;" oninput="updateWpPosition()">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Tipografia do jogo</label>
+      <div class="font-grid" id="font-grid"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Tipo</label>
+      <div class="type-grid">
+        <div class="type-option selected" data-type="cartas"    onclick="selectType(this)"><span><i class="ph ph-cards-three"></i></span>Cartas</div>
+        <div class="type-option"          data-type="tabuleiro" onclick="selectType(this)"><span><i class="ph ph-dice-five"></i></span>Tabuleiro</div>
+        <div class="type-option"          data-type="dados"     onclick="selectType(this)"><span><i class="ph ph-crosshair"></i></span>Dados</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Pontuação</label>
+      <div class="scoring-grid">
+        <div class="scoring-option selected" data-scoring="high" onclick="selectScoring(this)"><span><i class="ph ph-arrow-up"></i></span>Maior vence</div>
+        <div class="scoring-option"          data-scoring="low"  onclick="selectScoring(this)"><span><i class="ph ph-arrow-down"></i></span>Menor vence</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Jogadores</label>
+      <div class="player-stepper">
+        <button class="stepper-btn" onclick="changePlayerCount(-1)">−</button>
+        <span class="stepper-value" id="player-count-display">2</span>
+        <button class="stepper-btn" onclick="changePlayerCount(1)">＋</button>
+      </div>
+      <div id="player-names"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Regras de pontuação inteligente</label>
+      <div class="rules-formula-editor" id="formula-editor"></div>
+      <button class="add-formula-btn" onclick="addFormulaRow()">＋ Adicionar regra de pontuação</button>
+      <p class="hint-text">Ex: "Carta preta" = -5 pts. Durante o jogo você seleciona o jogador e toca a regra.</p>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Regras gerais (texto livre)</label>
+      <textarea class="form-textarea" id="setup-rules" placeholder="Descreva as regras do jogo..."></textarea>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══ DETAIL MODAL ═══ -->
+<div id="detail-modal" class="modal-overlay">
+  <div class="modal-header">
+    <button class="modal-back" onclick="closeDetail()">← Voltar</button>
+    <span class="modal-title">Detalhes da Partida</span>
+    <span></span>
+  </div>
+  <div class="modal-body" id="detail-content"></div>
+</div>
+
+<!-- ═══ RULES MODAL ═══ -->
+<div id="rules-modal" class="modal-overlay">
+  <div class="modal-header">
+    <button class="modal-back" onclick="closeRulesModal()">← Voltar</button>
+    <span class="modal-title">Regras</span>
+    <span></span>
+  </div>
+  <div class="modal-body">
+    <div id="rules-formula-display"></div>
+    <div class="rules-box" id="rules-modal-content"></div>
+  </div>
+</div>
+
+<!-- ═══ MUSIC MODAL ═══ -->
+<div class="music-modal" id="music-modal" onclick="closeMusicModal(event)">
+  <div class="music-panel">
+    <div class="music-handle"></div>
+    <div class="music-panel-title"><i class="ph ph-music-notes"></i> Música ambiente</div>
+    <div class="music-url-row">
+      <input type="text" class="form-input" id="music-url-input" placeholder="Cole um link do YouTube...">
+      <button class="btn btn-primary btn-sm btn-round" onclick="loadMusic()">▶</button>
+    </div>
+    <div class="music-presets">
+      <button class="music-preset" onclick="setPreset('https://www.youtube.com/watch?v=jfKfPfyJRdk')">🎵 lo-fi chill</button>
+      <button class="music-preset" onclick="setPreset('https://www.youtube.com/watch?v=2YBtspm8j8M')">🎲 board game BGM</button>
+      <button class="music-preset" onclick="setPreset('https://www.youtube.com/watch?v=5qap5aO4i9A')">☕ jazz café</button>
+      <button class="music-preset" onclick="setPreset('https://www.youtube.com/watch?v=HuFYqnbVbzY')">🍺 tavern music</button>
+    </div>
+    <div class="music-status" id="music-status"></div>
+    <div id="yt-container" style="display:none;margin-top:12px;border-radius:12px;overflow:hidden;border:1.5px solid var(--border);">
+      <iframe id="yt-frame" allow="autoplay; encrypted-media" allowfullscreen frameborder="0" width="100%" height="180" style="display:block;"></iframe>
+    </div>
+    <button class="btn btn-ghost btn-block btn-round mt-12" onclick="stopMusic()"><i class="ph ph-stop"></i> Parar música</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="confetti-container" id="confetti"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
