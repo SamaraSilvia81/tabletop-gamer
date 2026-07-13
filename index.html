@@ -4,6 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>TableTop — Game Tracker</title>
+<meta name="description" content="Registre pontos, acompanhe partidas e saiba quem realmente manda na mesa.">
+
+<!-- Favicon / ícone do app -->
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<meta name="theme-color" content="#D9A441">
+
+<!-- Preview ao compartilhar o link (Open Graph / WhatsApp / Telegram / etc) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="TableTop — Game Tracker">
+<meta property="og:description" content="Registre pontos, acompanhe partidas e saiba quem realmente manda na mesa.">
+<meta property="og:image" content="preview.png">
+
+<!-- Preview ao compartilhar o link (Twitter / X) -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="TableTop — Game Tracker">
+<meta name="twitter:description" content="Registre pontos, acompanhe partidas e saiba quem realmente manda na mesa.">
+<meta name="twitter:image" content="preview.png">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,400;1,700&family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Unbounded:wght@700;800&family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
@@ -41,6 +63,7 @@
     Table<em>Top</em>
   </div>
   <div class="topbar-right">
+    <button class="icon-btn" id="join-room-btn" onclick="openJoinModal()" title="Entrar em sala compartilhada"><i class="ph ph-users-three"></i></button>
     <button class="icon-btn" id="music-toggle-btn" onclick="openMusicModal()" title="Música ambiente"><i class="ph ph-music-notes"></i></button>
   </div>
 </header>
@@ -83,6 +106,35 @@
     <div class="section-header">
       <h2 class="section-title">Configurações</h2>
       <p class="section-sub">Personalize sua experiência</p>
+    </div>
+
+    <!-- Profile -->
+    <div class="card card-primary" id="profile-card">
+      <div class="card-title"><i class="ph ph-identification-badge" style="font-size:1rem;"></i> Perfil</div>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+        <div id="profile-avatar" onclick="document.getElementById('profile-avatar-input').click()" style="width:64px;height:64px;border-radius:50%;background:var(--primary);border:2px solid var(--text);display:grid;place-items:center;overflow:hidden;cursor:pointer;flex-shrink:0;position:relative;">
+          <i class="ph ph-camera" style="font-size:1.4rem;color:var(--text);"></i>
+        </div>
+        <input type="file" accept="image/*" id="profile-avatar-input" style="display:none" onchange="handleProfileAvatar(event)">
+        <div style="flex:1;">
+          <label class="form-label">Apelido</label>
+          <input type="text" class="form-input" id="profile-nickname" placeholder="Como te chamam na mesa?" oninput="saveProfile()">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;" id="profile-stats">
+        <div class="card" style="padding:10px 4px;margin:0;">
+          <div style="font-size:1.3rem;font-weight:800;color:var(--primary-dim);" id="stat-games">0</div>
+          <div style="font-size:0.6rem;color:var(--text-3);">jogos criados</div>
+        </div>
+        <div class="card" style="padding:10px 4px;margin:0;">
+          <div style="font-size:1.3rem;font-weight:800;color:var(--secondary);" id="stat-matches">0</div>
+          <div style="font-size:0.6rem;color:var(--text-3);">partidas jogadas</div>
+        </div>
+        <div class="card" style="padding:10px 4px;margin:0;">
+          <div style="font-size:1.3rem;font-weight:800;color:var(--accent);" id="stat-wins">0</div>
+          <div style="font-size:0.6rem;color:var(--text-3);">vitórias</div>
+        </div>
+      </div>
     </div>
 
     <!-- Account / Login -->
@@ -315,6 +367,31 @@
 </div>
 
 <!-- ═══ MUSIC MODAL ═══ -->
+<!-- ═══ ROOM (SALA COMPARTILHADA) MODAL ═══ -->
+<div class="music-modal" id="room-modal" onclick="closeRoomModal(event)">
+  <div class="music-panel">
+    <div class="music-handle"></div>
+    <div class="music-panel-title"><i class="ph ph-users-three"></i> Sala compartilhada</div>
+    <div id="room-modal-body"></div>
+  </div>
+</div>
+
+<!-- ═══ JOIN ROOM MODAL ═══ -->
+<div class="music-modal" id="join-modal" onclick="closeJoinModal(event)">
+  <div class="music-panel">
+    <div class="music-handle"></div>
+    <div class="music-panel-title"><i class="ph ph-door"></i> Entrar em sala</div>
+    <p style="font-size:0.82rem;color:var(--text-2);margin-bottom:12px;line-height:1.5;">
+      Peça o código de 5 letras de quem criou a sala e digite abaixo.
+    </p>
+    <div class="music-url-row">
+      <input type="text" class="form-input" id="join-code-input" placeholder="Ex: A3F9K" maxlength="6" style="text-transform:uppercase;letter-spacing:2px;font-weight:700;text-align:center;">
+      <button class="btn btn-primary btn-sm btn-round" onclick="joinRoomFromInput()">Entrar</button>
+    </div>
+    <div class="music-status" id="join-status"></div>
+  </div>
+</div>
+
 <div class="music-modal" id="music-modal" onclick="closeMusicModal(event)">
   <div class="music-panel">
     <div class="music-handle"></div>

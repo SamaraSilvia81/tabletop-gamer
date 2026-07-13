@@ -174,7 +174,16 @@ const load = () => {
   } catch(e) {}
 };
 
-const save = () => localStorage.setItem(LS, JSON.stringify({ games: state.games, matches: state.matches }));
+const save = () => {
+  try {
+    localStorage.setItem(LS, JSON.stringify({ games: state.games, matches: state.matches }));
+    return true;
+  } catch (e) {
+    console.error('Falha ao salvar:', e);
+    toast('Armazenamento cheio! Use imagens menores ou apague partidas antigas.');
+    return false;
+  }
+};
 
 // ════════════════════════════════════════
 //  SETUP STATE
@@ -190,7 +199,7 @@ function navTo(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
   document.getElementById(`view-${v}`).classList.add('active');
   document.getElementById('fab-btn').style.display = v === 'library' ? 'grid' : 'none';
-  if (v === 'settings') buildThemeGrid('settings-theme-grid');
+  if (v === 'settings') { buildThemeGrid('settings-theme-grid'); renderProfile(); }
 }
 
 function toast(msg) {
@@ -251,9 +260,22 @@ function handleWallpaperFile(e) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    setup.wallpaper = ev.target.result;
-    document.getElementById('setup-wallpaper').value = '(arquivo local)';
-    applyWallpaperPreview(ev.target.result);
+    const img = new Image();
+    img.onload = () => {
+      const MAX_W = 1280;
+      const scale = Math.min(1, MAX_W / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const compressed = canvas.toDataURL('image/jpeg', 0.82);
+      setup.wallpaper = compressed;
+      document.getElementById('setup-wallpaper').value = '(arquivo local)';
+      applyWallpaperPreview(compressed);
+    };
+    img.onerror = () => toast('Não foi possível ler essa imagem');
+    img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
 }
@@ -509,9 +531,11 @@ function startMatch(gid) {
     wallpaper: g.wallpaper || '',
     wpPosX: g.wpPosX ?? 50, wpPosY: g.wpPosY ?? 50, wpZoom: g.wpZoom ?? 100,
     rounds: [], scores: g.players.map(() => 0),
+    log: [],
     startedAt: new Date().toISOString()
   };
   navTo('play');
+  resetTimer(); timerLimit = 0;
   renderPlay();
 }
 
@@ -565,6 +589,25 @@ function renderPlay() {
       </div>
     </div>
 
+    <div class="card" id="timer-card">
+      <div class="flex-between">
+        <div>
+          <div class="card-title" style="margin-bottom:2px;"><i class="ph ph-timer"></i> Cronômetro</div>
+          <div style="font-size:0.68rem;color:var(--text-3);" id="timer-remaining">${timerLimit>0 ? 'com limite' : 'sem limite — só para contabilizar'}</div>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:700;color:var(--text);" id="timer-display">00:00</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm btn-round" style="flex:1;" onclick="startTimer()"><i class="ph ph-play"></i> Iniciar</button>
+        <button class="btn btn-ghost btn-sm btn-round" style="flex:1;" onclick="pauseTimer()"><i class="ph ph-pause"></i> Pausar</button>
+        <button class="btn btn-ghost btn-sm btn-round" style="flex:1;" onclick="resetTimer()"><i class="ph ph-arrow-counter-clockwise"></i> Zerar</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn btn-ghost btn-sm btn-round" style="flex:1;font-size:0.72rem;" onclick="timerLimit=0;updateTimerDisplay();document.getElementById('timer-remaining').textContent='sem limite — só para contabilizar';toast('Modo: só contar');"><i class="ph ph-infinity"></i> Só contar</button>
+        <button class="btn btn-ghost btn-sm btn-round" style="flex:1;font-size:0.72rem;" onclick="setTimerLimit()"><i class="ph ph-hourglass"></i> Definir limite</button>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-title"><i class="ph ph-trophy"></i> Placar</div>
       ${sorted.map((p,rank) => `
@@ -576,6 +619,19 @@ function renderPlay() {
     </div>
 
     ${smartPanel}
+
+    ${m.log && m.log.length ? `
+      <div class="card" id="log-card">
+        <div class="card-title"><i class="ph ph-receipt"></i> Registro de pontuação</div>
+        ${m.log.map((entry, li) => ({entry, li})).reverse().map(({entry, li}) => `
+          <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.8rem;">
+            <span style="color:var(--text-2);"><strong style="color:var(--text);">${m.players[entry.player].split(' ')[0]}</strong> — ${entry.label}</span>
+            <span style="display:flex;align-items:center;gap:8px;">
+              <span style="font-family:'JetBrains Mono',monospace;color:${entry.value>=0?'var(--secondary)':'var(--accent)'};">${entry.value>0?'+':''}${entry.value}</span>
+              <button class="btn btn-ghost btn-sm" style="padding:2px 6px;" onclick="removeLogEntry(${li})" title="Desfazer"><i class="ph ph-x"></i></button>
+            </span>
+          </div>`).join('')}
+      </div>` : ''}
 
     <div class="card">
       <div class="round-header">
@@ -611,6 +667,7 @@ function renderPlay() {
 
     <div class="action-bar">
       ${m.rules||m.formulas?.length ? `<button class="btn btn-ghost btn-sm btn-round" onclick="showRules()"><i class="ph ph-scroll"></i> Regras</button>` : ''}
+      <button class="btn btn-ghost btn-sm btn-round" onclick="openRoomModal()"><i class="ph ph-users-three"></i> ${m.roomCode ? 'Sala '+m.roomCode : 'Compartilhar'}</button>
       <button class="btn btn-danger btn-sm btn-round" style="margin-left:auto;" onclick="endMatch()"><i class="ph ph-stop"></i> Encerrar</button>
     </div>`;
 }
@@ -621,6 +678,8 @@ function applyFormula(fi) {
   const f = m.formulas[fi];
   const playerIdx = parseInt(document.getElementById('formula-player')?.value ?? 0);
   m.scores[playerIdx] += f.value;
+  if (!m.log) m.log = [];
+  m.log.push({ player: playerIdx, label: f.label, value: f.value, ts: new Date().toISOString() });
   const el = document.getElementById(`sv-${playerIdx}`);
   if (el) {
     const p = document.createElement('span');
@@ -642,6 +701,39 @@ function applyFormula(fi) {
         </div>`).join('');
   }
   toast(`${f.label}: ${f.value>0?'+':''}${f.value} pts → ${m.players[playerIdx].split(' ')[0]}`);
+  renderLogCard();
+  broadcastState();
+}
+
+function renderLogCard() {
+  const m = state.currentMatch;
+  if (!m) return;
+  let card = document.getElementById('log-card');
+  const html = m.log.map((entry, li) => ({entry, li})).reverse().map(({entry, li}) => `
+    <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.8rem;">
+      <span style="color:var(--text-2);"><strong style="color:var(--text);">${m.players[entry.player].split(' ')[0]}</strong> — ${entry.label}</span>
+      <span style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'JetBrains Mono',monospace;color:${entry.value>=0?'var(--secondary)':'var(--accent)'};">${entry.value>0?'+':''}${entry.value}</span>
+        <button class="btn btn-ghost btn-sm" style="padding:2px 6px;" onclick="removeLogEntry(${li})" title="Desfazer"><i class="ph ph-x"></i></button>
+      </span>
+    </div>`).join('');
+  if (!card && m.log.length) {
+    // card doesn't exist yet, need a full re-render to insert it in the right place
+    renderPlay();
+    return;
+  }
+  if (card) card.innerHTML = `<div class="card-title"><i class="ph ph-receipt"></i> Registro de pontuação</div>${html}`;
+}
+
+function removeLogEntry(li) {
+  const m = state.currentMatch;
+  if (!m || !m.log || !m.log[li]) return;
+  const entry = m.log[li];
+  m.scores[entry.player] -= entry.value;
+  m.log.splice(li, 1);
+  SFX.remove();
+  renderPlay();
+  broadcastState();
 }
 
 function confirmRound() {
@@ -665,26 +757,30 @@ function confirmRound() {
       }
     }
   });
-  setTimeout(() => { renderPlay(); toast(`Rodada ${m.rounds.length} confirmada`); }, 380);
+  setTimeout(() => { renderPlay(); toast(`Rodada ${m.rounds.length} confirmada`); broadcastState(); }, 380);
 }
 
 function endMatch() {
   const m = state.currentMatch;
   if (!m) return;
-  if (m.rounds.length === 0 && !confirm('Nenhuma rodada registrada. Encerrar assim mesmo?')) return;
+  const hasActivity = m.rounds.length > 0 || (m.log && m.log.length > 0);
+  if (!hasActivity && !confirm('Nenhuma rodada registrada. Encerrar assim mesmo?')) return;
   const sorted = getSorted(m);
   const match = {
     id: 'm_'+Date.now(), gameId: m.gameId, gameName: m.gameName, emoji: m.emoji,
     type: m.type, scoring: m.scoring, players: [...m.players],
     rounds: [...m.rounds], finalScores: [...m.scores], winner: sorted[0],
     startedAt: m.startedAt, endedAt: new Date().toISOString(),
-    rules: m.rules, formulas: m.formulas||[],
+    rules: m.rules, formulas: m.formulas||[], log: m.log||[],
     font: m.font, wallpaper: m.wallpaper
   };
   state.matches.unshift(match);
+  const wasInRoom = !!m.roomCode;
+  if (wasInRoom) { m.ended = true; broadcastState(); }
+  if (roomChannel) { sb?.removeChannel(roomChannel); roomChannel = null; }
   state.currentMatch = null;
   save();
-  if (match.rounds.length > 0) { SFX.win(); spawnConfetti(); showWinner(match); }
+  if (hasActivity) { SFX.win(); spawnConfetti(); showWinner(match); }
   else { navTo('history'); renderPlay(); renderHistory(); }
 }
 
@@ -767,8 +863,8 @@ function renderHistory() {
           `<span class="podium-chip">${i===0?'<i class="ph ph-crown"></i> ':''}${p.name.split(' ')[0]} <span class="p-score">${p.score}</span></span>`
         ).join('')}</div>
         <div class="match-footer">
-          <button class="btn btn-ghost btn-sm btn-round" onclick="event.stopPropagation();replay('${m.id}')"><i class="ph ph-arrow-counter-clockwise"></i> Jogar de novo</button>
-          <button class="btn btn-danger btn-sm btn-round" onclick="event.stopPropagation();delMatch('${m.id}')"><i class="ph ph-trash"></i></button>
+          <button class="btn btn-ghost btn-sm btn-round" style="flex:1;" onclick="event.stopPropagation();replay('${m.id}')"><i class="ph ph-arrow-counter-clockwise"></i> Jogar de novo</button>
+          <button class="btn btn-danger btn-sm btn-round" style="flex-shrink:0;" onclick="event.stopPropagation();delMatch('${m.id}')"><i class="ph ph-trash"></i> Excluir</button>
         </div>
       </div>`;
   }).join('');
@@ -814,9 +910,18 @@ function showDetail(id) {
           </div>`;
         }).join('')}
       </div>` : ''}
-    ${m.formulas&&m.formulas.length ? `
+    ${m.log&&m.log.length ? `
       <div class="card" style="border-color:var(--secondary);">
-        <div class="card-title"><i class="ph ph-lightning"></i> Regras usadas</div>
+        <div class="card-title"><i class="ph ph-receipt"></i> De onde veio cada ponto</div>
+        ${m.log.map(entry => `
+          <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
+            <span style="color:var(--text-2);"><strong style="color:var(--text);">${m.players[entry.player].split(' ')[0]}</strong> — ${entry.label}</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:${entry.value>=0?'var(--secondary)':'var(--accent)'};">${entry.value>0?'+':''}${entry.value}</span>
+          </div>`).join('')}
+      </div>` : ''}
+    ${m.formulas&&m.formulas.length ? `
+      <div class="card">
+        <div class="card-title"><i class="ph ph-lightning"></i> Regras cadastradas neste jogo</div>
         ${m.formulas.map(f => `
           <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
             <span style="color:var(--text-2);">${f.label}</span>
@@ -827,17 +932,19 @@ function showDetail(id) {
       <div class="card">
         <div class="card-title"><i class="ph ph-scroll"></i> Regras</div>
         <div class="rules-box">${m.rules}</div>
-      </div>` : ''}`;
+      </div>` : ''}
+    <button class="btn btn-danger btn-block btn-round mt-12" onclick="if(delMatch('${m.id}'))closeDetail();"><i class="ph ph-trash"></i> Excluir partida</button>`;
   document.getElementById('detail-modal').classList.add('active');
 }
 
 function closeDetail() { document.getElementById('detail-modal').classList.remove('active'); }
 function delMatch(id) {
-  if (!confirm('Excluir partida?')) return;
+  if (!confirm('Excluir partida?')) return false;
   SFX.remove();
   state.matches = state.matches.filter(m => m.id !== id);
   save(); renderHistory();
   toast('Partida excluída');
+  return true;
 }
 function replay(id) {
   const m = state.matches.find(x => x.id === id);
@@ -845,6 +952,189 @@ function replay(id) {
   const g = state.games.find(x => x.id === m.gameId);
   if (g) startMatch(g.id);
   else toast('Jogo não encontrado');
+}
+
+// ════════════════════════════════════════
+//  SALA COMPARTILHADA (multiplayer em tempo real)
+// ════════════════════════════════════════
+let roomChannel = null;
+
+function genRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let c = '';
+  for (let i = 0; i < 5; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  return c;
+}
+
+function roomLink(code) {
+  return `${window.location.origin}${window.location.pathname}?sala=${code}`;
+}
+
+function openRoomModal() {
+  const m = state.currentMatch;
+  const body = document.getElementById('room-modal-body');
+  if (!m) { body.innerHTML = `<p style="font-size:0.85rem;color:var(--text-2);">Inicie uma partida primeiro.</p>`; }
+  else if (m.roomCode) {
+    body.innerHTML = `
+      <p style="font-size:0.82rem;color:var(--text-2);margin-bottom:12px;line-height:1.5;">
+        ${m.isHost ? 'Compartilhe esse código ou link — quem entrar vê o placar em tempo real, junto com você.' : 'Você está nesta sala como convidado.'}
+      </p>
+      <div style="text-align:center;font-size:2rem;font-weight:800;letter-spacing:6px;font-family:'JetBrains Mono',monospace;color:var(--primary-dim);margin-bottom:12px;">${m.roomCode}</div>
+      <button class="btn btn-primary btn-block btn-round" onclick="copyRoomLink()"><i class="ph ph-link"></i> Copiar link de convite</button>
+      <button class="btn btn-ghost btn-block btn-round mt-12" onclick="leaveRoom()"><i class="ph ph-sign-out"></i> Sair da sala</button>`;
+  } else {
+    body.innerHTML = `
+      <p style="font-size:0.82rem;color:var(--text-2);margin-bottom:14px;line-height:1.5;">
+        Crie uma sala e mande o código para os outros jogadores. Cada um registra pelo próprio celular e todo mundo vê o placar atualizando ao vivo — tipo Kahoot.
+      </p>
+      <button class="btn btn-primary btn-block btn-round" onclick="createRoom()"><i class="ph ph-broadcast"></i> Criar sala e compartilhar</button>`;
+  }
+  document.getElementById('room-modal').classList.add('active');
+}
+function closeRoomModal(e) {
+  if (!e || e.target === document.getElementById('room-modal'))
+    document.getElementById('room-modal').classList.remove('active');
+}
+
+function subscribeRoom(code, isHost) {
+  if (!sb) { toast('Supabase não disponível'); return; }
+  if (roomChannel) { sb.removeChannel(roomChannel); roomChannel = null; }
+  roomChannel = sb.channel(`tt-sala-${code}`, { config: { broadcast: { self: false } } });
+  roomChannel.on('broadcast', { event: 'sync' }, ({ payload }) => {
+    const wasEnded = payload.ended;
+    state.currentMatch = wasEnded ? null : { ...payload, isHost };
+    if (wasEnded) { toast('O anfitrião encerrou a partida'); navTo('history'); renderHistory(); }
+    else if (document.getElementById('view-play').classList.contains('active') || !isHost) {
+      navTo('play'); renderPlay();
+    }
+  });
+  roomChannel.on('broadcast', { event: 'request-sync' }, () => {
+    if (isHost) broadcastState();
+  });
+  roomChannel.subscribe();
+}
+
+function createRoom() {
+  const m = state.currentMatch;
+  if (!m) return;
+  const code = genRoomCode();
+  m.roomCode = code; m.isHost = true;
+  subscribeRoom(code, true);
+  SFX.confirm();
+  setTimeout(broadcastState, 400); // dá tempo do subscribe confirmar
+  openRoomModal();
+}
+
+function leaveRoom() {
+  const m = state.currentMatch;
+  if (roomChannel) { sb?.removeChannel(roomChannel); roomChannel = null; }
+  if (m) { m.roomCode = null; m.isHost = false; }
+  closeRoomModal();
+  toast('Você saiu da sala');
+  renderPlay();
+}
+
+function copyRoomLink() {
+  const m = state.currentMatch;
+  if (!m?.roomCode) return;
+  navigator.clipboard?.writeText(roomLink(m.roomCode)).then(() => toast('Link copiado!'))
+    .catch(() => toast(`Código: ${m.roomCode}`));
+}
+
+function broadcastState() {
+  const m = state.currentMatch;
+  if (!m?.roomCode || !roomChannel) return;
+  roomChannel.send({ type: 'broadcast', event: 'sync', payload: m });
+}
+
+function openJoinModal() { document.getElementById('join-modal').classList.add('active'); }
+function closeJoinModal(e) {
+  if (!e || e.target === document.getElementById('join-modal'))
+    document.getElementById('join-modal').classList.remove('active');
+}
+
+function joinRoomFromInput() {
+  const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+  if (code.length < 4) { toast('Digite um código válido'); return; }
+  joinRoom(code);
+}
+
+function joinRoom(code) {
+  code = code.trim().toUpperCase();
+  document.getElementById('join-status').textContent = 'Entrando na sala...';
+  subscribeRoom(code, false);
+  setTimeout(() => {
+    roomChannel?.send({ type: 'broadcast', event: 'request-sync', payload: {} });
+  }, 500);
+  setTimeout(() => {
+    if (!state.currentMatch || state.currentMatch.roomCode !== code) {
+      toast('Sala não encontrada. Confira o código e tente de novo.');
+      const st = document.getElementById('join-status'); if (st) st.textContent = '';
+    } else {
+      closeJoinModal();
+    }
+  }, 2500);
+}
+
+// Entrar automaticamente se o link tiver ?sala=CODIGO
+(function checkRoomFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('sala');
+  if (code) {
+    setTimeout(() => {
+      enterApp();
+      joinRoom(code);
+    }, 600);
+  }
+})();
+
+// ════════════════════════════════════════
+//  PERFIL
+// ════════════════════════════════════════
+let profile = { nickname: '', avatar: '' };
+function loadProfile() {
+  try { profile = { ...profile, ...JSON.parse(localStorage.getItem('tt_profile') || '{}') }; } catch(e) {}
+}
+function saveProfile() {
+  profile.nickname = document.getElementById('profile-nickname')?.value.trim() || '';
+  localStorage.setItem('tt_profile', JSON.stringify(profile));
+  renderProfile();
+}
+function handleProfileAvatar(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const S = 240;
+      const canvas = document.createElement('canvas');
+      canvas.width = S; canvas.height = S;
+      const ctx = canvas.getContext('2d');
+      const side = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width-side)/2, (img.height-side)/2, side, side, 0, 0, S, S);
+      profile.avatar = canvas.toDataURL('image/jpeg', 0.85);
+      saveProfile();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function renderProfile() {
+  const nickInput = document.getElementById('profile-nickname');
+  if (nickInput && document.activeElement !== nickInput) nickInput.value = profile.nickname;
+  const av = document.getElementById('profile-avatar');
+  if (av) {
+    av.innerHTML = profile.avatar
+      ? `<img src="${profile.avatar}" style="width:100%;height:100%;object-fit:cover;">`
+      : `<i class="ph ph-camera" style="font-size:1.4rem;color:var(--text);"></i>`;
+  }
+  const gEl = document.getElementById('stat-games'); if (gEl) gEl.textContent = state.games.length;
+  const mEl = document.getElementById('stat-matches'); if (mEl) mEl.textContent = state.matches.length;
+  const wins = profile.nickname
+    ? state.matches.filter(m => m.winner?.name?.trim().toLowerCase() === profile.nickname.trim().toLowerCase()).length
+    : 0;
+  const wEl = document.getElementById('stat-wins'); if (wEl) wEl.textContent = wins;
 }
 
 // ════════════════════════════════════════
@@ -879,8 +1169,8 @@ function loadMusic() {
   container.style.display = 'block';
   musicPlaying = true;
   document.getElementById('music-toggle-btn').classList.add('playing');
-  document.getElementById('music-status').textContent = 'Tocando...';
-  toast('Música iniciada');
+  document.getElementById('music-status').innerHTML = `Tocando... <a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener" style="color:var(--info);text-decoration:underline;">Não toca? Abrir no YouTube</a>`;
+  toast('Música iniciada — se não tocar, toque no play dentro do vídeo (alguns navegadores bloqueiam som automático)');
 }
 
 function setPreset(url) {
@@ -985,6 +1275,8 @@ if (sb) {
     if (event === 'SIGNED_IN') {
       updateAuthUI();
       toast('Login realizado!');
+      const splash = document.getElementById('splash');
+      if (splash && splash.style.display !== 'none') enterApp();
     }
     if (event === 'SIGNED_OUT') {
       updateAuthUI();
@@ -1273,6 +1565,7 @@ function useTemplate(i) {
 //  INIT
 // ════════════════════════════════════════
 load();
+loadProfile();
 renderLibrary();
 renderHistory();
 renderPlay();
