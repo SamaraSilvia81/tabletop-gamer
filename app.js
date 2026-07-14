@@ -609,7 +609,7 @@ function duplicateGame(id) {
 // ============================================================
 //  BIBLIOTECA E HISTÓRICO
 // ============================================================
-const TM = { cartas:'Cartas', tabuleiro:'Tabuleiro', dados:'Dados', palavras:'Palavras' };
+const TM = { cartas:'Cartas', tabuleiro:'Tabuleiro', dados:'Dados', palavras:'Palavras', pedras:'Pedras' };
 
 function renderLibrary() {
   const list = document.getElementById('game-list');

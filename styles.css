@@ -709,6 +709,9 @@ body::after {
 }
 
 .type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+/* Grade de tipos de jogo: 3 na primeira linha, últimos 2 centralizados */
+.type-grid .type-option:nth-child(4) { grid-column: 1; }
+.type-grid .type-option:nth-child(5) { grid-column: 2; }
 
 .type-option {
   padding: 12px 6px;
