@@ -1254,6 +1254,14 @@ function endMatch() {
   const hasActivity = m.rounds.length > 0 || (m.log && m.log.length > 0);
   if (!hasActivity && !confirm('Nenhuma rodada registrada. Encerrar assim mesmo?')) return;
   const sorted = getSorted(m);
+  
+  // 🔥 SALVA OS PARTICIPANTES COM AVATAR
+  const participantsData = m.participants.map(p => ({
+    nickname: p.nickname || m.players[p.slot] || `Jogador ${p.slot+1}`,
+    avatar: p.avatar || '',
+    slot: p.slot
+  }));
+
   const match = {
     id: genId(), gameId: m.gameId, gameName: m.gameName, emoji: m.emoji,
     type: m.type, scoring: m.scoring, players: [...m.players],
@@ -1261,7 +1269,9 @@ function endMatch() {
     startedAt: m.startedAt, endedAt: new Date().toISOString(),
     rules: m.rules, formulas: m.formulas||[], log: m.log||[],
     font: m.font, wallpaper: m.wallpaper,
-    teamModes: m.teamModes, currentMode: m.currentMode
+    wpPosX: m.wpPosX ?? 50, wpPosY: m.wpPosY ?? 50, wpZoom: m.wpZoom ?? 100,
+    teamModes: m.teamModes, currentMode: m.currentMode,
+    participants: participantsData // 🔥 NOVO
   };
   state.matches.unshift(match);
   const wasInRoom = !!m.roomCode;
@@ -1276,24 +1286,57 @@ function endMatch() {
 
 function showWinner(match) {
   const el = document.getElementById('play-content');
-  const sorted = match.players.map((n,i) => ({ name: n, score: match.finalScores[i] }));
+  const sorted = match.players.map((name, i) => {
+    // Busca o participante correspondente pelo slot (ou pelo índice)
+    let participant = null;
+    if (match.participants) {
+      participant = match.participants.find(p => p.slot === i);
+    }
+    const displayName = participant ? participant.nickname : name;
+    const avatar = participant ? participant.avatar : '';
+    return { name: displayName, score: match.finalScores[i], idx: i, avatar };
+  });
   sorted.sort((a,b) => match.scoring==='high' ? b.score-a.score : a.score-b.score);
   const fontCSS = getFontCSS(match.font);
+
+  // Wallpaper
+  const wallpaperStyle = match.wallpaper ? `
+    background-image: url('${match.wallpaper}');
+    background-position: ${match.wpPosX ?? 50}% ${match.wpPosY ?? 50}%;
+    background-size: ${(match.wpZoom ?? 100) === 100 ? 'cover' : (match.wpZoom ?? 100) + '%'};
+    background-repeat: no-repeat;
+    position: relative;
+  ` : '';
+
+  // Lista de classificação com avatares
+  const rankingHTML = sorted.map((p, i) => {
+    const avatarContent = p.avatar ? avatarHTML(p.avatar) : `<span style="font-weight:700;font-size:0.72rem;color:#fff;">${p.name[0]}</span>`;
+    const bgColor = p.avatar ? 'transparent' : AVATAR_COLORS[i % AVATAR_COLORS.length];
+    return `
+      <div class="score-row ${i===0?'leader':''}" style="margin-bottom:5px;">
+        <span class="score-rank">${i===0?'<i class="ph ph-crown"></i>':i+1}</span>
+        <div class="podium-avatar-wrap" style="background:${bgColor};border-color:var(--text);width:30px;height:30px;border-radius:50%;display:grid;place-items:center;overflow:hidden;border:1.5px solid var(--text);">
+          ${avatarContent}
+        </div>
+        <span class="score-name" style="margin-left:8px;">${p.name}</span>
+        <span class="score-total">${p.score}</span>
+      </div>
+    `;
+  }).join('');
+
   el.innerHTML = `
-    <div class="winner-screen">
-      <span class="winner-trophy"><i class="ph ph-trophy" style="font-size:4rem;"></i></span>
-      <div class="winner-eyebrow">Vencedor</div>
-      <div class="winner-name" style="font-family:${fontCSS}">${match.winner.name}</div>
-      <div class="winner-pts">${match.winner.score} pts</div>
+    <div class="winner-screen" style="${wallpaperStyle}">
+      ${match.wallpaper ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);z-index:0;"></div>` : ''}
+      <div style="position:relative;z-index:1;">
+        <span class="winner-trophy"><i class="ph ph-trophy" style="font-size:4rem;"></i></span>
+        <div class="winner-eyebrow">Vencedor</div>
+        <div class="winner-name" style="font-family:${fontCSS}">${match.winner.name}</div>
+        <div class="winner-pts">${match.winner.score} pts</div>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">📊 Resultado Final</div>
-      ${sorted.map((p,i) => `
-        <div class="score-row ${i===0?'leader':''}">
-          <span class="score-rank">${i===0?'<i class="ph ph-crown"></i>':i+1}</span>
-          <span class="score-name">${p.name}</span>
-          <span class="score-total">${p.score}</span>
-        </div>`).join('')}
+      ${rankingHTML}
     </div>
     <div class="action-bar" style="justify-content:center;">
       <button class="btn btn-ghost btn-round" onclick="navTo('library');renderPlay();">← Jogos</button>
@@ -1936,6 +1979,7 @@ function matchToRow(m, uid) {
   return {
     id: m.id, user_id: uid, game_id: m.gameId, game_name: m.gameName, emoji: m.emoji,
     type: m.type, scoring: m.scoring, players: m.players, rounds: m.rounds || [],
+    participants: m.participants || [],
     final_scores: m.finalScores || [], winner: m.winner || null,
     rules: m.rules || '', formulas: m.formulas || [], log: m.log || [],
     font: m.font || 'playfair', wallpaper: m.wallpaper || '',
@@ -1949,6 +1993,7 @@ function rowToMatch(r) {
     id: r.id, gameId: r.game_id, gameName: r.game_name, emoji: r.emoji,
     type: r.type, scoring: r.scoring, players: r.players || [],
     rounds: r.rounds || [], finalScores: r.final_scores || [], winner: r.winner || null,
+    participants: r.participants || [],
     rules: r.rules || '', formulas: r.formulas || [], log: r.log || [],
     font: r.font || 'playfair', wallpaper: r.wallpaper || '',
     teamModes: r.team_modes || ['individual'],
