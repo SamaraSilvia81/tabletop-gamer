@@ -1534,27 +1534,24 @@ function stopMusic() {
 }
 
 // ═══════════════════════════════════════════════
-// SUPABASE — CREDENCIAIS VIA .env (SEGURAS!)
+// SUPABASE — CREDENCIAIS HARDCODED (SEGURAS POIS SÃO ANON)
 // ═══════════════════════════════════════════════
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = 'https://obnxqnllrrkoznxxnwkh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ibnhxbmxscnJrb3pueHhud2toIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzIwMzIsImV4cCI6MjA5OTU0ODAzMn0.Yy94y6YVXnHYMbunney-hCCp5NbYtNTozaLKuCnXUrQ';
 let sb = null;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn('⚠️ Supabase credentials not found in environment variables. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.');
-} else {
-  try {
-    const mod = window.supabase;
-    if (mod && mod.createClient) {
-      sb = mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      console.log('✅ Supabase client initialized from environment variables.');
-    } else {
-      console.warn('⚠️ Supabase library not found on window.supabase');
-    }
-  } catch (e) {
-    console.warn('❌ Supabase init failed:', e);
+try {
+  const mod = window.supabase;
+  if (mod && mod.createClient) {
+    sb = mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('✅ Supabase client initialized with hardcoded credentials.');
+  } else {
+    console.warn('⚠️ Supabase library not found on window.supabase');
   }
+} catch (e) {
+  console.warn('❌ Supabase init failed:', e);
 }
+
 // ═══════════════════════════════════════════════
 // SINCRONIZAÇÃO COM A NUVEM
 // ═══════════════════════════════════════════════
