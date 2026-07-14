@@ -1174,6 +1174,7 @@ function createRoom() {
   subscribeRoom(code, true);
   SFX.confirm();
   save();
+  renderPlay();
   setTimeout(broadcastState, 400);
   openRoomModal();
 }
