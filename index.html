@@ -313,18 +313,18 @@
    <div class="form-group">
     <label class="form-label">Modos de jogo suportados</label>
     <div class="type-grid" id="team-mode-grid">
-      <label class="type-option selected" data-mode="individual" onclick="toggleTeamMode(this)">
-        <input type="checkbox" checked style="display:none;">
+      <div class="type-option selected" data-mode="individual" onclick="toggleTeamMode(this, event)">
+        <input type="checkbox" checked style="display:none;" tabindex="-1">
         <span><i class="ph ph-user"></i></span>Individual
-      </label>
-      <label class="type-option" data-mode="duplas" onclick="toggleTeamMode(this)">
-        <input type="checkbox" style="display:none;">
+      </div>
+      <div class="type-option" data-mode="duplas" onclick="toggleTeamMode(this, event)">
+        <input type="checkbox" style="display:none;" tabindex="-1">
         <span><i class="ph ph-users"></i></span>Duplas
-      </label>
-      <label class="type-option" data-mode="times" onclick="toggleTeamMode(this)">
-        <input type="checkbox" style="display:none;">
+      </div>
+      <div class="type-option" data-mode="times" onclick="toggleTeamMode(this, event)">
+        <input type="checkbox" style="display:none;" tabindex="-1">
         <span><i class="ph ph-users-three"></i></span>Times
-      </label>
+      </div>
     </div>
     <p class="hint-text">Marque os modos que este jogo pode ter. Na partida, o anfitrião escolhe qual usar.</p>
   </div>
@@ -476,17 +476,15 @@
   <button class="rs-confirm" onclick="confirmRound()"><i class="ph ph-check-circle"></i> Confirmar Rodada</button>
 </div>
 
-<!-- CONFIRM MODAL -->
-<div class="modal-overlay" id="confirm-modal">
-  <div class="modal-header">
-    <span class="modal-title" id="confirm-title">Confirmar</span>
-    <span></span>
-  </div>
-  <div class="modal-body" id="confirm-body">
-    <p id="confirm-message" style="font-size:0.95rem;color:var(--text-2);">Tem certeza?</p>
-    <div style="display:flex;gap:8px;margin-top:20px;">
-      <button class="btn btn-ghost btn-block" onclick="closeConfirmModal()">Cancelar</button>
-      <button class="btn btn-danger btn-block" id="confirm-yes-btn">Sim, confirmar</button>
+<!-- CONFIRM BOTTOM SHEET -->
+<div class="music-modal" id="confirm-modal" onclick="closeConfirmModal(event)">
+  <div class="music-panel" style="border-top-color: var(--accent);">
+    <div class="music-handle"></div>
+    <div class="music-panel-title" id="confirm-title">Confirmar</div>
+    <p id="confirm-message" style="font-size:0.88rem;color:var(--text-2);line-height:1.6;margin-bottom:20px;">Tem certeza?</p>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-ghost btn-block btn-round" onclick="closeConfirmModal()">Cancelar</button>
+      <button class="btn btn-danger btn-block btn-round" id="confirm-yes-btn">Sim, confirmar</button>
     </div>
   </div>
 </div>

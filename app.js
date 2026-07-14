@@ -256,17 +256,21 @@ function spawnConfetti() {
 // ============================================================
 //  FUNÇÕES DE SETUP (CRIAÇÃO/EDIÇÃO) COM MÚLTIPLOS MODOS
 // ============================================================
-function toggleTeamMode(el) {
+function toggleTeamMode(el, event) {
+  // Evita double-fire do label→checkbox→label
+  if (event) event.preventDefault();
   const cb = el.querySelector('input[type="checkbox"]');
   if (!cb) return;
-  cb.checked = !cb.checked;
-  el.classList.toggle('selected', cb.checked);
+  // Inverte manualmente
+  const newState = !cb.checked;
+  cb.checked = newState;
+  el.classList.toggle('selected', newState);
   // Atualiza o array teamModes no setup
   const checkedModes = Array.from(document.querySelectorAll('#team-mode-grid .type-option'))
     .filter(opt => opt.querySelector('input[type="checkbox"]').checked)
     .map(opt => opt.dataset.mode);
   setup.teamModes = checkedModes.length ? checkedModes : ['individual'];
-  // Se não houver nenhum marcado, marca individual novamente
+  // Se não houver nenhum marcado, força individual
   if (checkedModes.length === 0) {
     const first = document.querySelector('#team-mode-grid .type-option');
     if (first) {
@@ -276,7 +280,6 @@ function toggleTeamMode(el) {
     }
   }
   SFX.tap();
-  console.log('Modos selecionados:', setup.teamModes); // Debug
 }
 function initTeamModes() {
   const grid = document.getElementById('team-mode-grid');
@@ -689,92 +692,116 @@ function openTeamSetupModal() {
     toast('Apenas o anfitrião pode organizar os times');
     return;
   }
-  // Cria um modal rápido (pode ser um overlay simples)
-  const overlay = document.createElement('div');
-  overlay.id = 'team-setup-overlay';
-  overlay.style.cssText = `
-    position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-    z-index: 300; display: flex; align-items: center; justify-content: center;
-  `;
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
-  const panel = document.createElement('div');
-  panel.style.cssText = `
-    background: var(--surface); border-radius: 16px; padding: 20px; max-width: 400px; width: 90%;
-    max-height: 80vh; overflow-y: auto; border: 2px solid var(--text);
-    box-shadow: var(--card-shadow);
-  `;
+  // Remove instância anterior se existir
+  const old = document.getElementById('team-setup-sheet');
+  if (old) old.remove();
 
-  // Título
-  const title = document.createElement('h3');
-  title.textContent = `Organizar ${m.currentMode === 'duplas' ? 'Duplas' : 'Times'}`;
-  title.style.cssText = `font-family: 'Fredoka', sans-serif; margin-bottom: 16px; text-align: center;`;
+  const isDuplas = m.currentMode === 'duplas';
+  const numTeams = m.teams.length;
 
-  // Lista de participantes
-  const list = document.createElement('div');
-  list.style.cssText = 'display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;';
+  // Monta o HTML do sheet
+  const sheet = document.createElement('div');
+  sheet.id = 'team-setup-sheet';
+  sheet.className = 'music-modal';
+  sheet.style.zIndex = '350';
 
-  m.participants.forEach((p, idx) => {
-    const row = document.createElement('div');
-    row.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface-2); border-radius: 8px; border: 1px solid var(--border);';
+  // Gera lista de jogadores por time
+  function buildTeamHTML() {
+    return m.teams.map((team, ti) => {
+      const memberChips = team.members.map(slot => {
+        const name = m.participants.find(p => p.slot === slot)?.nickname || m.players[slot] || `Jogador ${slot+1}`;
+        return `<span class="team-member-chip" data-slot="${slot}" data-team="${ti}" onclick="removeFromTeam(${slot})">${name} ✕</span>`;
+      }).join('');
 
-    // Avatar/nome
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = p.nickname || `Jogador ${p.slot+1}`;
-    nameSpan.style.cssText = 'flex: 1; font-weight: 600;';
+      // Jogadores disponíveis (sem time ou neste time)
+      const allSlots = m.players.map((_,i) => i);
+      const assigned = m.teams.flatMap(t => t.members);
+      const free = allSlots.filter(s => !assigned.includes(s));
 
-    // Selector de time (dropdown)
-    const select = document.createElement('select');
-    select.style.cssText = 'padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface);';
-    const numTeams = m.teams.length;
-    for (let t = 0; t < numTeams; t++) {
-      const opt = document.createElement('option');
-      opt.value = t;
-      opt.textContent = m.teams[t].name;
-      if (m.teams[t].members.includes(p.slot)) opt.selected = true;
-      select.appendChild(opt);
-    }
-    // Ao mudar, move o jogador para o time selecionado
-    select.onchange = () => {
-      const teamId = parseInt(select.value);
-      // Remove de todos os times
-      m.teams.forEach(team => {
-        team.members = team.members.filter(slot => slot !== p.slot);
-      });
-      // Adiciona ao time escolhido
-      if (m.teams[teamId]) {
-        m.teams[teamId].members.push(p.slot);
+      let addOptions = '';
+      if (free.length > 0) {
+        addOptions = free.map(slot => {
+          const name = m.participants.find(p => p.slot === slot)?.nickname || m.players[slot] || `Jogador ${slot+1}`;
+          return `<button class="team-add-btn" onclick="addToTeam(${slot}, ${ti})">${name}</button>`;
+        }).join('');
       }
-      // Atualiza a interface e salva
-      renderPlay();
-      broadcastState();
-      save();
-      // Reabre o modal para continuar ajustando (ou recria)
-      // Fechamos e reabrimos para refletir as mudanças
-      overlay.remove();
-      openTeamSetupModal();
-    };
 
-    row.appendChild(nameSpan);
-    row.appendChild(select);
-    list.appendChild(row);
-  });
+      return `
+        <div class="team-slot-block" data-team="${ti}">
+          <div class="team-slot-label">${team.name}</div>
+          <div class="team-members-row" id="team-members-${ti}">
+            ${memberChips || '<span class="team-empty-hint">Nenhum jogador</span>'}
+          </div>
+          ${addOptions ? `<div class="team-add-row">${addOptions}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
 
-  // Botão fechar
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = 'Pronto';
-  closeBtn.style.cssText = `
-    background: var(--primary); border: 2px solid var(--text); color: var(--text);
-    padding: 10px 20px; border-radius: 12px; font-weight: 700; width: 100%;
-    cursor: pointer; box-shadow: var(--card-shadow-sm);
+  sheet.innerHTML = `
+    <div class="music-panel" style="border-top-color: var(--secondary);">
+      <div class="music-handle"></div>
+      <div class="music-panel-title">
+        <i class="ph ph-users"></i> Montar ${isDuplas ? 'Duplas' : 'Times'}
+      </div>
+      <p style="font-size:0.78rem;color:var(--text-3);margin-bottom:14px;line-height:1.5;">
+        Toque num jogador abaixo para adicioná-lo à dupla. Toque no nome dentro da dupla para remover.
+      </p>
+      <div id="team-slot-list">${buildTeamHTML()}</div>
+      <button class="btn btn-secondary btn-block btn-round mt-12" style="font-weight:700;" onclick="closeTeamSetupSheet()">
+        <i class="ph ph-check"></i> Pronto
+      </button>
+    </div>
   `;
-  closeBtn.onclick = () => overlay.remove();
 
-  panel.appendChild(title);
-  panel.appendChild(list);
-  panel.appendChild(closeBtn);
-  overlay.appendChild(panel);
-  document.body.appendChild(overlay);
+  sheet.onclick = (e) => { if (e.target === sheet) closeTeamSetupSheet(); };
+  document.body.appendChild(sheet);
+  // Força reflow para animação
+  requestAnimationFrame(() => sheet.classList.add('active'));
+
+  // Expõe funções de manipulação
+  window._rebuildTeamSheet = () => {
+    const list = document.getElementById('team-slot-list');
+    if (list) list.innerHTML = buildTeamHTML();
+  };
+}
+
+window.addToTeam = function(slot, teamIdx) {
+  const m = state.currentMatch;
+  if (!m) return;
+  // Remove de qualquer time anterior
+  m.teams.forEach(t => { t.members = t.members.filter(s => s !== slot); });
+  // Verifica limite (duplas = 2 por time)
+  if (m.currentMode === 'duplas' && m.teams[teamIdx].members.length >= 2) {
+    toast('Dupla já tem 2 jogadores!');
+    SFX.error();
+    return;
+  }
+  m.teams[teamIdx].members.push(slot);
+  renderPlay();
+  broadcastState();
+  save();
+  if (window._rebuildTeamSheet) window._rebuildTeamSheet();
+  SFX.tap();
+};
+
+window.removeFromTeam = function(slot) {
+  const m = state.currentMatch;
+  if (!m) return;
+  m.teams.forEach(t => { t.members = t.members.filter(s => s !== slot); });
+  renderPlay();
+  broadcastState();
+  save();
+  if (window._rebuildTeamSheet) window._rebuildTeamSheet();
+  SFX.tap();
+};
+
+function closeTeamSetupSheet() {
+  const sheet = document.getElementById('team-setup-sheet');
+  if (!sheet) return;
+  sheet.classList.remove('active');
+  setTimeout(() => sheet.remove(), 320);
 }
 
 function setMatchMode(mode) {
@@ -786,25 +813,21 @@ function setMatchMode(mode) {
   }
   m.currentMode = mode;
   if (mode === 'duplas' || mode === 'times') {
-    // Se já existem times, não recria automaticamente
-    if (!m.teams || m.teams.length === 0) {
-      // Cria times vazios com base no número de jogadores
-      const numTeams = mode === 'duplas' ? 2 : Math.ceil(m.participants.length / 2);
-      m.teams = [];
-      for (let t = 0; t < numTeams; t++) {
-        m.teams.push({
-          id: t,
-          name: `${mode === 'duplas' ? 'Dupla' : 'Time'} ${t+1}`,
-          members: []
-        });
-      }
-      // Distribui os participantes igualmente (automático)
-      m.participants.forEach((p, idx) => {
-        const teamIdx = idx % numTeams;
-        m.teams[teamIdx].members.push(p.slot);
+    // Sempre recria os times ao trocar de modo para limpar estado anterior
+    const totalPlayers = m.players.length;
+    const numTeams = mode === 'duplas'
+      ? Math.ceil(totalPlayers / 2)
+      : Math.ceil(totalPlayers / 3);
+    m.teams = [];
+    for (let t = 0; t < numTeams; t++) {
+      m.teams.push({
+        id: t,
+        name: `${mode === 'duplas' ? 'Dupla' : 'Time'} ${t+1}`,
+        members: []
       });
     }
-    // Abre o modal de edição de times
+    // Não pré-distribui — usuário escolhe manualmente no sheet
+    // Abre o sheet de configuração
     openTeamSetupModal();
   } else {
     m.teams = [];
@@ -2178,11 +2201,24 @@ async function cloudUpsertGame(g) {
     console.warn('cloudUpsertGame ignorado: sem sb ou cloudUserId');
     return;
   }
-  console.log('Enviando jogo para nuvem:', g.name, 'teamModes:', g.teamModes);
-  const { error } = await sb.from('games').upsert(gameToRow(g, cloudUserId), { onConflict: 'id' });
+  const row = gameToRow(g, cloudUserId);
+  console.log('Enviando jogo para nuvem:', g.name, 'row:', row);
+  const { error } = await sb.from('games').upsert(row, { onConflict: 'id' });
   if (error) {
     console.error('Falha ao sincronizar jogo com a nuvem:', error);
-    toast('Erro ao salvar na nuvem, mas o jogo está salvo localmente.');
+    // Tenta sem team_modes caso a coluna não exista
+    if (error.code === '42703' || error.message?.includes('team_modes') || error.message?.includes('column')) {
+      const { team_modes, ...rowSemModo } = row;
+      const { error: e2 } = await sb.from('games').upsert(rowSemModo, { onConflict: 'id' });
+      if (e2) {
+        console.error('Falha mesmo sem team_modes:', e2);
+        toast(`Nuvem: ${e2.message || 'erro desconhecido'}`);
+      } else {
+        console.warn('Jogo salvo sem team_modes (coluna ausente no Supabase — adicione TEXT[] na tabela games)');
+      }
+    } else {
+      toast(`Nuvem: ${error.message || 'erro ao salvar'}`);
+    }
   } else {
     console.log('Jogo enviado com sucesso');
   }
@@ -2604,18 +2640,22 @@ function openConfirmModal(title, message, onConfirm) {
   confirmCallback = onConfirm;
 }
 
-function closeConfirmModal() {
+function closeConfirmModal(e) {
+  // Se chamado por evento de click, só fecha se clicou no overlay (não no panel)
+  if (e && e.target !== document.getElementById('confirm-modal')) return;
   document.getElementById('confirm-modal').classList.remove('active');
   confirmCallback = null;
 }
 
-// Event listener para o botão "Sim" (colocar dentro de initApp ou no final)
+// Event listener para o botão "Sim"
 document.addEventListener('DOMContentLoaded', () => {
   const yesBtn = document.getElementById('confirm-yes-btn');
   if (yesBtn) {
     yesBtn.addEventListener('click', () => {
       if (confirmCallback) confirmCallback();
-      closeConfirmModal();
+      // Fecha sem passar evento (fecha direto)
+      document.getElementById('confirm-modal').classList.remove('active');
+      confirmCallback = null;
     });
   }
 });
@@ -2631,6 +2671,8 @@ window.saveGame = saveGame;
 window.closeSetup = closeSetup;
 window.duplicateGame = duplicateGame;
 window.toggleTeamMode = toggleTeamMode;
+window.openTeamSetupModal = openTeamSetupModal;
+window.closeTeamSetupSheet = closeTeamSetupSheet;
 window.setMatchMode = setMatchMode;
 window.openRoomModal = openRoomModal;
 window.closeRoomModal = closeRoomModal;

@@ -2257,3 +2257,98 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ══════════════════════════════════════════════════
+   TEAM SETUP SHEET
+   ══════════════════════════════════════════════════ */
+
+.team-slot-block {
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: 13px;
+  padding: 13px 14px;
+  margin-bottom: 10px;
+}
+
+.team-slot-label {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--secondary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.team-slot-label::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--secondary);
+  flex-shrink: 0;
+}
+
+.team-members-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 32px;
+  margin-bottom: 8px;
+}
+
+.team-member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: var(--secondary);
+  color: #fff;
+  border: 1.5px solid var(--text);
+  border-radius: 20px;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--card-shadow-sm);
+  transition: all 0.12s;
+}
+
+.team-member-chip:active { transform: translate(1px, 1px); box-shadow: none; opacity: 0.8; }
+
+.team-empty-hint {
+  font-size: 0.72rem;
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.team-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1.5px dashed var(--border);
+  padding-top: 8px;
+}
+
+.team-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 11px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.team-add-btn::before { content: '+'; font-weight: 800; color: var(--secondary); }
+.team-add-btn:active { background: var(--secondary-glow); border-color: var(--secondary); color: var(--secondary); }
