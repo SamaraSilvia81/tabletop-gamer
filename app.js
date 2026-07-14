@@ -262,11 +262,12 @@ function toggleTeamMode(el) {
   cb.checked = !cb.checked;
   el.classList.toggle('selected', cb.checked);
   // Atualiza o array teamModes no setup
-  setup.teamModes = Array.from(document.querySelectorAll('#team-mode-grid .type-option'))
+  const checkedModes = Array.from(document.querySelectorAll('#team-mode-grid .type-option'))
     .filter(opt => opt.querySelector('input[type="checkbox"]').checked)
     .map(opt => opt.dataset.mode);
-  if (setup.teamModes.length === 0) {
-    // Se desmarcou todos, marca individual por padrão
+  setup.teamModes = checkedModes.length ? checkedModes : ['individual'];
+  // Se não houver nenhum marcado, marca individual novamente
+  if (checkedModes.length === 0) {
     const first = document.querySelector('#team-mode-grid .type-option');
     if (first) {
       const cb2 = first.querySelector('input[type="checkbox"]');
@@ -275,8 +276,8 @@ function toggleTeamMode(el) {
     }
   }
   SFX.tap();
+  console.log('Modos selecionados:', setup.teamModes); // Debug
 }
-
 function initTeamModes() {
   const grid = document.getElementById('team-mode-grid');
   if (!grid) return;
@@ -639,13 +640,14 @@ function renderLibrary() {
 
 function deleteGame(id) {
   SFX.remove();
-  state.games = state.games.filter(g => g.id !== id);
-  save();
-  renderLibrary();
-  toast('Jogo excluído');
-  cloudDeleteGame(id);
+  openConfirmModal('Excluir Jogo', 'Tem certeza que deseja excluir este jogo? Esta ação não pode ser desfeita.', () => {
+    state.games = state.games.filter(g => g.id !== id);
+    save();
+    renderLibrary();
+    toast('Jogo excluído');
+    cloudDeleteGame(id);
+  });
 }
-
 // ============================================================
 //  PARTIDA (com seleção de modo ativo)
 // ============================================================
@@ -1212,10 +1214,17 @@ function confirmRound() {
     registeredThisRound.some(entry => entry.player === i)
   );
 
-  if (!allRegistered && !confirm('Nem todos os jogadores registraram. Finalizar mesmo assim?')) {
+  if (!allRegistered) {
+    openConfirmModal('Finalizar Rodada', 'Nem todos os jogadores registraram. Finalizar mesmo assim?', () => {
+      finalizeRound(m);
+    });
     return;
   }
+  finalizeRound(m);
+}
 
+function finalizeRound(m) {
+  const lastRoundIndex = m.rounds.length;
   const lastRoundScores = m.rounds.length > 0 
     ? m.rounds[m.rounds.length - 1].scores 
     : m.players.map(() => 0);
@@ -1378,6 +1387,36 @@ function endMatch() {
     wpPosX: m.wpPosX ?? 50, wpPosY: m.wpPosY ?? 50, wpZoom: m.wpZoom ?? 100,
     teamModes: m.teamModes, currentMode: m.currentMode,
     participants: participantsData // 🔥 NOVO
+  };
+  state.matches.unshift(match);
+  const wasInRoom = !!m.roomCode;
+  if (wasInRoom) { m.ended = true; broadcastState(); }
+  if (roomChannel) { sb?.removeChannel(roomChannel); roomChannel = null; }
+  state.currentMatch = null;
+  save();
+  cloudUpsertMatch(match);
+  if (hasActivity) { SFX.win(); spawnConfetti(); showWinner(match); }
+  else { navTo('history'); renderPlay(); renderHistory(); }
+}
+
+function finishMatch(m) {
+  // O código que estava dentro de endMatch() após as verificações
+  const sorted = getSorted(m);
+  const participantsData = m.participants.map(p => ({
+    nickname: p.nickname || m.players[p.slot] || `Jogador ${p.slot+1}`,
+    avatar: p.avatar || '',
+    slot: p.slot
+  }));
+  const match = {
+    id: genId(), gameId: m.gameId, gameName: m.gameName, emoji: m.emoji,
+    type: m.type, scoring: m.scoring, players: [...m.players],
+    rounds: [...m.rounds], finalScores: [...m.scores], winner: sorted[0],
+    startedAt: m.startedAt, endedAt: new Date().toISOString(),
+    rules: m.rules, formulas: m.formulas||[], log: m.log||[],
+    font: m.font, wallpaper: m.wallpaper,
+    wpPosX: m.wpPosX ?? 50, wpPosY: m.wpPosY ?? 50, wpZoom: m.wpZoom ?? 100,
+    teamModes: m.teamModes, currentMode: m.currentMode,
+    participants: participantsData
   };
   state.matches.unshift(match);
   const wasInRoom = !!m.roomCode;
@@ -1555,11 +1594,13 @@ function showDetail(id) {
 function closeDetail() { document.getElementById('detail-modal').classList.remove('active'); }
 function delMatch(id) {
   SFX.remove();
-  state.matches = state.matches.filter(m => m.id !== id);
-  save(); renderHistory();
-  toast('Partida excluída');
-  cloudDeleteMatch(id);
-  return true;
+  openConfirmModal('Excluir Partida', 'Tem certeza que deseja excluir esta partida do histórico?', () => {
+    state.matches = state.matches.filter(m => m.id !== id);
+    save(); renderHistory();
+    toast('Partida excluída');
+    cloudDeleteMatch(id);
+    return true;
+  });
 }
 function replay(id) {
   const m = state.matches.find(x => x.id === id);
@@ -2113,7 +2154,7 @@ async function cloudUpsertGame(g) {
     console.warn('cloudUpsertGame ignorado: sem sb ou cloudUserId');
     return;
   }
-  console.log('Enviando jogo para nuvem:', g.name);
+  console.log('Enviando jogo para nuvem:', g.name, 'teamModes:', g.teamModes);
   const { error } = await sb.from('games').upsert(gameToRow(g, cloudUserId), { onConflict: 'id' });
   if (error) {
     console.error('Falha ao sincronizar jogo com a nuvem:', error);
@@ -2122,6 +2163,7 @@ async function cloudUpsertGame(g) {
     console.log('Jogo enviado com sucesso');
   }
 }
+
 async function cloudDeleteGame(id) {
   if (!sb || !cloudUserId) return;
   const { error } = await sb.from('games').delete().eq('id', id);
@@ -2525,6 +2567,34 @@ if (document.readyState === 'loading') {
 } else {
   initApp();
 }
+
+// ============================================================
+//  MODAL DE CONFIRMAÇÃO PERSONALIZADO
+// ============================================================
+let confirmCallback = null;
+
+function openConfirmModal(title, message, onConfirm) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-message').textContent = message;
+  document.getElementById('confirm-modal').classList.add('active');
+  confirmCallback = onConfirm;
+}
+
+function closeConfirmModal() {
+  document.getElementById('confirm-modal').classList.remove('active');
+  confirmCallback = null;
+}
+
+// Event listener para o botão "Sim" (colocar dentro de initApp ou no final)
+document.addEventListener('DOMContentLoaded', () => {
+  const yesBtn = document.getElementById('confirm-yes-btn');
+  if (yesBtn) {
+    yesBtn.addEventListener('click', () => {
+      if (confirmCallback) confirmCallback();
+      closeConfirmModal();
+    });
+  }
+});
 
 // ============================================================
 //  EXPORTA FUNÇÕES GLOBAIS PARA O HTML

@@ -476,6 +476,21 @@
   <button class="rs-confirm" onclick="confirmRound()"><i class="ph ph-check-circle"></i> Confirmar Rodada</button>
 </div>
 
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-header">
+    <span class="modal-title" id="confirm-title">Confirmar</span>
+    <span></span>
+  </div>
+  <div class="modal-body" id="confirm-body">
+    <p id="confirm-message" style="font-size:0.95rem;color:var(--text-2);">Tem certeza?</p>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+      <button class="btn btn-ghost btn-block" onclick="closeConfirmModal()">Cancelar</button>
+      <button class="btn btn-danger btn-block" id="confirm-yes-btn">Sim, confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <div class="confetti-container" id="confetti"></div>
 
