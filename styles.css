@@ -1028,8 +1028,7 @@ body::after {
 .play-hero-bg {
   position: absolute;
   inset: 0;
-  background-size: cover;
-  background-position: center;
+  background-repeat: no-repeat;
   z-index: 0;
 }
 .play-hero-bg::after {

@@ -200,7 +200,7 @@ function toast(msg) {
       _toastTimer = setTimeout(() => {
         el.classList.remove('show');
         _toastTimer = null;
-      }, 2200);
+      }, 1500);
     });
   });
 }
@@ -289,7 +289,7 @@ function applyWallpaperPreview(src) {
     // Usa background-image idêntico à tela real (play-hero-bg) para que o preview seja fiel
     prev.style.backgroundImage = `url('${src}')`;
     prev.style.backgroundPosition = `${posX}% ${posY}%`;
-    prev.style.backgroundSize = `${zoom}%`;
+    prev.style.backgroundSize = zoom === 100 ? 'cover' : `${zoom}%`;
     prev.style.backgroundRepeat = 'no-repeat';
     prev.innerHTML = `<div class="wp-label" style="color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.8);"><i class='ph ph-check'></i> Fundo definido</div>`;
     // Testa se a imagem é válida; se não, mostra erro
@@ -585,7 +585,7 @@ function renderPlay() {
   // HERO COM WALLPAPER
   const heroHTML = `
     <div class="play-hero${m.wallpaper ? ' has-wallpaper' : ''}">
-      ${m.wallpaper ? `<div class="play-hero-bg" style="background-image:url('${m.wallpaper}');background-position:${m.wpPosX??50}% ${m.wpPosY??50}%;background-size:${m.wpZoom??100}%;"></div>` : ''}
+      ${m.wallpaper ? `<div class="play-hero-bg" style="background-image:url('${m.wallpaper}');background-position:${m.wpPosX??50}% ${m.wpPosY??50}%;background-size:${(m.wpZoom??100) === 100 ? 'cover' : (m.wpZoom??100)+'%'};"></div>` : ''}
       <span class="play-emoji">${getIconSVG(m.emoji, 48)}</span>
       <div class="play-name" style="font-family:${fontCSS}">${m.gameName}</div>
       <div class="play-meta">
