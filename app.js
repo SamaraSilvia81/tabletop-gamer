@@ -158,6 +158,16 @@ const FONTS = [
 let state = { games: [], matches: [], currentMatch: null, editingGameId: null };
 const LS = 'tabletop_v4';
 
+// Gera um UUID válido (compatível com a coluna `uuid` do Supabase).
+// Antes os ids eram tipo 'g_'+Date.now(), que não é um UUID e quebrava o insert na nuvem.
+function genId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 const load = () => {
   try {
     const d = JSON.parse(localStorage.getItem(LS) || localStorage.getItem('tabletop_v3') || '{}');
@@ -486,7 +496,7 @@ function saveGame() {
   })).filter(f => f.label);
 
   const game = {
-    id: state.editingGameId || 'g_'+Date.now(),
+    id: state.editingGameId || genId(),
     name, emoji: setup.emoji, type: setup.type, scoring: setup.scoring,
     players, rules: document.getElementById('setup-rules').value.trim(),
     font: setup.font,
@@ -504,6 +514,7 @@ function saveGame() {
   }
   save(); renderLibrary(); closeSetup(); SFX.confirm();
   toast(state.editingGameId ? 'Jogo atualizado ✓' : 'Jogo criado ✓');
+  cloudUpsertGame(game);
 }
 
 const TM = { cartas:'Cartas', tabuleiro:'Tabuleiro', dados:'Dados', palavras:'Palavras' };
@@ -537,6 +548,7 @@ function deleteGame(id) {
   state.games = state.games.filter(g => g.id !== id);
   save(); renderLibrary();
   toast('Jogo excluído');
+  cloudDeleteGame(id);
 }
 
 function startMatch(gid) {
@@ -803,7 +815,7 @@ function endMatch() {
   if (!hasActivity && !confirm('Nenhuma rodada registrada. Encerrar assim mesmo?')) return;
   const sorted = getSorted(m);
   const match = {
-    id: 'm_'+Date.now(), gameId: m.gameId, gameName: m.gameName, emoji: m.emoji,
+    id: genId(), gameId: m.gameId, gameName: m.gameName, emoji: m.emoji,
     type: m.type, scoring: m.scoring, players: [...m.players],
     rounds: [...m.rounds], finalScores: [...m.scores], winner: sorted[0],
     startedAt: m.startedAt, endedAt: new Date().toISOString(),
@@ -816,6 +828,7 @@ function endMatch() {
   if (roomChannel) { sb?.removeChannel(roomChannel); roomChannel = null; }
   state.currentMatch = null;
   save();
+  cloudUpsertMatch(match);
   if (hasActivity) { SFX.win(); spawnConfetti(); showWinner(match); }
   else { navTo('history'); renderPlay(); renderHistory(); }
 }
@@ -976,6 +989,7 @@ function delMatch(id) {
   state.matches = state.matches.filter(m => m.id !== id);
   save(); renderHistory();
   toast('Partida excluída');
+  cloudDeleteMatch(id);
   return true;
 }
 function replay(id) {
@@ -1330,6 +1344,113 @@ try {
   }
 } catch(e) { console.warn('Supabase init failed:', e); }
 
+// ═══════════════════════════════════════════════
+// SINCRONIZAÇÃO COM A NUVEM (jogos e partidas)
+// Sem login: tudo fica só no localStorage, como sempre foi.
+// Com login: cada mudança local também é gravada no Supabase,
+// e ao logar em um novo device os dados da nuvem são puxados.
+// ═══════════════════════════════════════════════
+let cloudUserId = null;
+let cloudSyncing = false;
+
+function gameToRow(g, uid) {
+  return {
+    id: g.id, user_id: uid, name: g.name, emoji: g.emoji, type: g.type,
+    scoring: g.scoring, players: g.players, rules: g.rules || '',
+    formulas: g.formulas || [], font: g.font || 'playfair',
+    wallpaper: (g.wallpaper && g.wallpaper !== '(arquivo local)') ? g.wallpaper : '',
+    wp_pos_x: g.wpPosX ?? 50, wp_pos_y: g.wpPosY ?? 50, wp_zoom: g.wpZoom ?? 100,
+    created_at: g.createdAt || new Date().toISOString()
+  };
+}
+function rowToGame(r) {
+  return {
+    id: r.id, name: r.name, emoji: r.emoji, type: r.type, scoring: r.scoring,
+    players: r.players || [], rules: r.rules || '', formulas: r.formulas || [],
+    font: r.font || 'playfair', wallpaper: r.wallpaper || '',
+    wpPosX: r.wp_pos_x ?? 50, wpPosY: r.wp_pos_y ?? 50, wpZoom: r.wp_zoom ?? 100,
+    createdAt: r.created_at
+  };
+}
+function matchToRow(m, uid) {
+  return {
+    id: m.id, user_id: uid, game_id: m.gameId, game_name: m.gameName, emoji: m.emoji,
+    type: m.type, scoring: m.scoring, players: m.players, rounds: m.rounds || [],
+    final_scores: m.finalScores || [], winner: m.winner || null,
+    rules: m.rules || '', formulas: m.formulas || [], log: m.log || [],
+    font: m.font || 'playfair', wallpaper: m.wallpaper || '',
+    started_at: m.startedAt, ended_at: m.endedAt
+  };
+}
+function rowToMatch(r) {
+  return {
+    id: r.id, gameId: r.game_id, gameName: r.game_name, emoji: r.emoji,
+    type: r.type, scoring: r.scoring, players: r.players || [],
+    rounds: r.rounds || [], finalScores: r.final_scores || [], winner: r.winner || null,
+    rules: r.rules || '', formulas: r.formulas || [], log: r.log || [],
+    font: r.font || 'playfair', wallpaper: r.wallpaper || '',
+    startedAt: r.started_at, endedAt: r.ended_at
+  };
+}
+
+async function cloudUpsertGame(g) {
+  if (!sb || !cloudUserId) return;
+  const { error } = await sb.from('games').upsert(gameToRow(g, cloudUserId));
+  if (error) console.error('Falha ao sincronizar jogo com a nuvem:', error);
+}
+async function cloudDeleteGame(id) {
+  if (!sb || !cloudUserId) return;
+  const { error } = await sb.from('games').delete().eq('id', id);
+  if (error) console.error('Falha ao excluir jogo na nuvem:', error);
+}
+async function cloudUpsertMatch(m) {
+  if (!sb || !cloudUserId) return;
+  const { error } = await sb.from('matches').upsert(matchToRow(m, cloudUserId));
+  if (error) console.error('Falha ao sincronizar partida com a nuvem:', error);
+}
+async function cloudDeleteMatch(id) {
+  if (!sb || !cloudUserId) return;
+  const { error } = await sb.from('matches').delete().eq('id', id);
+  if (error) console.error('Falha ao excluir partida na nuvem:', error);
+}
+
+// Roda quando o usuário loga (ou já abre o app logado). Busca o que existe na
+// nuvem, sobe o que só existe local (ex: jogos criados offline antes de logar),
+// e deixa local + nuvem com o mesmo conteúdo.
+async function pullCloudData() {
+  if (!sb || !cloudUserId || cloudSyncing) return;
+  cloudSyncing = true;
+  try {
+    const [gamesRes, matchesRes] = await Promise.all([
+      sb.from('games').select('*').eq('user_id', cloudUserId),
+      sb.from('matches').select('*').eq('user_id', cloudUserId)
+    ]);
+    if (gamesRes.error || matchesRes.error) {
+      console.error('Falha ao puxar dados da nuvem:', gamesRes.error, matchesRes.error);
+      toast('Não consegui sincronizar com a nuvem agora.');
+      return;
+    }
+    const cloudGames = (gamesRes.data || []).map(rowToGame);
+    const cloudMatches = (matchesRes.data || []).map(rowToMatch);
+    const cloudGameIds = new Set(cloudGames.map(g => g.id));
+    const cloudMatchIds = new Set(cloudMatches.map(m => m.id));
+
+    const onlyLocalGames = state.games.filter(g => !cloudGameIds.has(g.id));
+    const onlyLocalMatches = state.matches.filter(m => !cloudMatchIds.has(m.id));
+    await Promise.all(onlyLocalGames.map(cloudUpsertGame));
+    await Promise.all(onlyLocalMatches.map(cloudUpsertMatch));
+
+    state.games = [...cloudGames, ...onlyLocalGames];
+    state.matches = [...cloudMatches, ...onlyLocalMatches]
+      .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+    localStorage.setItem(LS, JSON.stringify({ games: state.games, matches: state.matches }));
+    renderLibrary(); renderHistory();
+    toast('Dados sincronizados com a nuvem ✓');
+  } finally {
+    cloudSyncing = false;
+  }
+}
+
 // AUTH
 async function loginWithGoogle() {
   if (!sb) { toast('Supabase não disponível'); return; }
@@ -1412,14 +1533,21 @@ if (sb) {
   const _cameFromOAuth = window.location.hash.includes('access_token');
   sb.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN') {
+      cloudUserId = session?.user?.id || null;
       updateAuthUI();
       if (_cameFromOAuth) toast('Login realizado!');
       const splash = document.getElementById('splash');
       if (splash && splash.style.display !== 'none') enterApp();
+      pullCloudData();
     }
     if (event === 'SIGNED_OUT') {
+      cloudUserId = null;
       updateAuthUI();
     }
+  });
+  // Se o app abrir com uma sessão já ativa (usuário voltou logado), sincroniza também.
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session?.user) { cloudUserId = session.user.id; pullCloudData(); }
   });
   updateAuthUI();
 }
