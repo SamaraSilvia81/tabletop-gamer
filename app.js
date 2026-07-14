@@ -1,6 +1,3 @@
-// ════════════════════════════════════════
-//  THEME SYSTEM
-// ════════════════════════════════════════
 const THEMES = [
   { id: 'prateleira', name: 'Prateleira de Jogos', desc: 'Ivory · Dourado · Verde · Vinho',
     swatches: ['#FFF3D6', '#D9A441', '#4A9B7F', '#8E3542'] },
@@ -8,21 +5,41 @@ const THEMES = [
     swatches: ['#FAF6EE', '#BB240A', '#322470', '#EDCC4D'] },
   { id: 'retrogame',  name: 'Retro Videogame', desc: 'Mostarda · Coral · Roxo · Verde',
     swatches: ['#FFC567', '#FD5A46', '#552CB7', '#00995E'] },
+  { id: 'dark',       name: 'Dark Board', desc: 'Escuro · Dourado · Vinho · Gelo',
+    swatches: ['#1A1A1A', '#D9A441', '#8E3542', '#4A9B7F'] },
+  { id: 'noir',       name: 'Noir', desc: 'Preto · Branco · Cinza · Prata',
+    swatches: ['#000000', '#FFFFFF', '#888888', '#CCCCCC'] },
 ];
 
 let currentTheme = localStorage.getItem('tt_theme') || 'prateleira';
+let darkMode = localStorage.getItem('tt_dark') === 'true';
 
-function applyTheme(id) {
+function applyTheme(id, forceDark) {
   currentTheme = id;
-  document.body.setAttribute('data-theme', id);
-  document.getElementById('splash').setAttribute('data-theme', id);
+  const dark = (forceDark !== undefined) ? forceDark : darkMode;
+  const themeId = dark ? id + '-dark' : id;
+  document.body.setAttribute('data-theme', themeId);
+  document.getElementById('splash').setAttribute('data-theme', themeId);
   localStorage.setItem('tt_theme', id);
+  localStorage.setItem('tt_dark', dark ? 'true' : 'false');
+  const toggle = document.getElementById('dark-mode-toggle');
+  if (toggle) toggle.checked = dark;
+  updateDarkModeText(dark);
+}
+
+function toggleDarkMode(enabled) {
+  darkMode = enabled;
+  applyTheme(currentTheme, enabled);
+}
+
+function updateDarkModeText(enabled) {
+  const label = document.querySelector('.card:has(#dark-mode-toggle) .flex-between div:first-child div:last-child');
+  if (label) label.textContent = enabled ? 'Fundo escuro ativado' : 'Mantém o fundo claro do tema';
 }
 
 function selectTheme(id, el) {
   SFX.tap();
   applyTheme(id);
-  // Update splash grid
   document.querySelectorAll('.theme-card').forEach(c => {
     c.classList.toggle('selected', c.dataset.themeId === id);
   });
@@ -36,7 +53,7 @@ function buildThemeGrid(containerId, small) {
          data-theme-id="${t.id}"
          onclick="selectThemeModal('${t.id}', this)">
       <div class="theme-swatches">
-        ${t.swatches.map((s,i) => `<div class="theme-swatch" style="background:${s};${s==='#F5EDD6'||s==='#F0F4F8'||s==='#FAF6EE'||s==='#EAF4F4'||s==='#F9F7F4' ? 'border:1px solid rgba(0,0,0,0.08);' : ''}"></div>`).join('')}
+        ${t.swatches.map((s,i) => `<div class="theme-swatch" style="background:${s};${s==='#F5EDD6'||s==='#F0F4F8'||s==='#FAF6EE'||s==='#EAF4F4'||s==='#F9F7F4'||s==='#1A1A1A'||s==='#000000' ? 'border:1px solid rgba(0,0,0,0.08);' : ''}"></div>`).join('')}
       </div>
       <div class="theme-name">${t.name}</div>
       <div class="theme-desc">${t.desc}</div>
@@ -51,16 +68,9 @@ function selectThemeModal(id, el) {
   });
 }
 
-function openThemePicker() {
-  navTo('settings');
-}
-
-// Apply saved theme on load
 applyTheme(currentTheme);
 
-// ════════════════════════════════════════
-//  SPLASH
-// ════════════════════════════════════════
+// SPLASH
 function enterApp() {
   SFX.confirm();
   const splash = document.getElementById('splash');
@@ -68,9 +78,7 @@ function enterApp() {
   setTimeout(() => { splash.style.display = 'none'; }, 500);
 }
 
-// ════════════════════════════════════════
-//  SOUND ENGINE
-// ════════════════════════════════════════
+// SOUND ENGINE
 const SFX = (() => {
   let ctx;
   const getCtx = () => { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); return ctx; };
@@ -94,11 +102,7 @@ const SFX = (() => {
   };
 })();
 
-// ════════════════════════════════════════
-//  STATE
-// ════════════════════════════════════════
-// Pixel art SVG game icons — colorful, uses theme palette dynamically
-// Each icon has a primary color role (filled with theme color at render time)
+// STATE
 const PIXEL_ICONS = [
   { id:'dice',    label:'Dado',      color:'primary' },
   { id:'cards',   label:'Cartas',    color:'accent' },
@@ -122,7 +126,6 @@ const PIXEL_ICONS = [
   { id:'heart',   label:'Coração',   color:'accent' },
 ];
 
-// Pixel art SVG paths (shape only — colors applied dynamically)
 const ICON_PATHS = {
   dice:       (f,s) => `<rect x="2" y="2" width="12" height="12" rx="2" fill="${f}" /><rect x="2" y="2" width="12" height="12" rx="2" stroke="${s}" stroke-width="1.5" fill="none"/><circle cx="5.5" cy="5.5" r="1.3" fill="${s}"/><circle cx="10.5" cy="5.5" r="1.3" fill="${s}"/><circle cx="8" cy="8" r="1.3" fill="${s}"/><circle cx="5.5" cy="10.5" r="1.3" fill="${s}"/><circle cx="10.5" cy="10.5" r="1.3" fill="${s}"/>`,
   cards:      (f,s) => `<rect x="1" y="3" width="9" height="11" rx="1.5" fill="${s}" opacity="0.3" transform="rotate(-10 5 8)"/><rect x="5" y="1" width="10" height="13" rx="1.5" fill="${f}"/><rect x="5" y="1" width="10" height="13" rx="1.5" stroke="${s}" stroke-width="1.2" fill="none"/><text x="8" y="6.5" font-size="4.5" font-weight="900" fill="${s}" font-family="monospace">A</text><text x="8" y="12.5" font-size="5.5" fill="${s}" font-family="serif" opacity="0.7">♠</text>`,
@@ -146,12 +149,25 @@ const ICON_PATHS = {
   heart:      (f,s) => `<path d="M8 14s-6-4-6-8a3 3 0 0 1 6 0 3 3 0 0 1 6 0c0 4-6 8-6 8z" fill="${f}" stroke="${s}" stroke-width="1.2"/>`,
 };
 
-// Color palette map: CSS var name → actual hex values per theme
+const AVATAR_COLORS = ['#D9A441','#4A9B7F','#8E3542','#3B62B8','#6846C6','#BB240A','#322470','#EDCC4D','#FD5A46','#552CB7','#00995E','#FFC567'];
+
+function getAvatarColor(name) {
+  if (!name) return '#D9A441';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
 const THEME_COLORS = {
   prateleira: { primary:'#D9A441', secondary:'#4A9B7F', accent:'#8E3542', info:'#3B62B8', purple:'#6846C6', text:'#241A0E' },
   picnic:     { primary:'#BB240A', secondary:'#322470', accent:'#EDCC4D', info:'#5A7A30', purple:'#7A3560', text:'#2A1A08' },
   retrogame:  { primary:'#FD5A46', secondary:'#552CB7', accent:'#FFC567', info:'#00995E', purple:'#552CB7', text:'#1A1208' },
+  dark:       { primary:'#D9A441', secondary:'#4A9B7F', accent:'#8E3542', info:'#3B62B8', purple:'#6846C6', text:'#EAE2D6' },
+  noir:       { primary:'#FFFFFF', secondary:'#CCCCCC', accent:'#888888', info:'#AAAAAA', purple:'#999999', text:'#FFFFFF' },
 };
+
 const EMOJIS = PIXEL_ICONS.map(p => p.id);
 
 const FONTS = [
@@ -185,14 +201,9 @@ const save = () => {
   }
 };
 
-// ════════════════════════════════════════
-//  SETUP STATE
-// ════════════════════════════════════════
 let setup = { emoji:'dice', type:'cartas', scoring:'high', playerCount:2, font:'playfair', wallpaper:'', wpPosX:50, wpPosY:50, wpZoom:100, formulas:[] };
 
-// ════════════════════════════════════════
-//  NAV
-// ════════════════════════════════════════
+// NAV
 function navTo(v) {
   SFX.click();
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === v));
@@ -200,6 +211,7 @@ function navTo(v) {
   document.getElementById(`view-${v}`).classList.add('active');
   document.getElementById('fab-btn').style.display = v === 'library' ? 'grid' : 'none';
   if (v === 'settings') { buildThemeGrid('settings-theme-grid'); renderProfile(); }
+  window.location.hash = v;
 }
 
 function toast(msg) {
@@ -222,9 +234,7 @@ function spawnConfetti() {
   setTimeout(() => c.innerHTML = '', 3200);
 }
 
-// ════════════════════════════════════════
-//  FONT PICKER
-// ════════════════════════════════════════
+// FONT PICKER
 function initFontGrid() {
   document.getElementById('font-grid').innerHTML = FONTS.map(f => `
     <div class="font-option ${f.id === setup.font ? 'selected' : ''}"
@@ -246,9 +256,7 @@ function getFontCSS(fontId) {
   return (FONTS.find(f => f.id === fontId) || FONTS[0]).css;
 }
 
-// ════════════════════════════════════════
-//  WALLPAPER
-// ════════════════════════════════════════
+// WALLPAPER
 function previewWallpaper() {
   const url = document.getElementById('setup-wallpaper').value.trim();
   setup.wallpaper = url;
@@ -258,6 +266,13 @@ function previewWallpaper() {
 function handleWallpaperFile(e) {
   const file = e.target.files[0];
   if (!file) return;
+
+  const preview = document.getElementById('wp-preview');
+  preview.innerHTML = `<div class="wp-label" style="color:var(--text-2);">⏳ Processando imagem...</div>`;
+
+  const saveBtn = document.querySelector('.modal-save');
+  if (saveBtn) saveBtn.disabled = true;
+
   const reader = new FileReader();
   reader.onload = ev => {
     const img = new Image();
@@ -273,8 +288,13 @@ function handleWallpaperFile(e) {
       setup.wallpaper = compressed;
       document.getElementById('setup-wallpaper').value = '(arquivo local)';
       applyWallpaperPreview(compressed);
+      if (saveBtn) saveBtn.disabled = false;
     };
-    img.onerror = () => toast('Não foi possível ler essa imagem');
+    img.onerror = () => {
+      toast('Não foi possível ler essa imagem. Tente outra.');
+      if (saveBtn) saveBtn.disabled = false;
+      preview.innerHTML = `<div class="wp-label"><i class="ph ph-image"></i> Erro</div>`;
+    };
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
@@ -307,9 +327,7 @@ function updateWpPosition() {
   applyWallpaperPreview(setup.wallpaper);
 }
 
-// ════════════════════════════════════════
-//  SMART RULES / FORMULAS
-// ════════════════════════════════════════
+// SMART RULES / FORMULAS
 function renderFormulaEditor() {
   const ed = document.getElementById('formula-editor');
   if (setup.formulas.length === 0) { ed.innerHTML = ''; return; }
@@ -339,16 +357,13 @@ function removeFormula(i) {
   renderFormulaEditor();
 }
 
-// ════════════════════════════════════════
-//  SETUP MODAL
-// ════════════════════════════════════════
+// SETUP MODAL
 function getIconSVG(id, size) {
   const icon = PIXEL_ICONS.find(p => p.id === id);
-  if (!icon) return id; // fallback to raw string (legacy emoji)
+  if (!icon) return id;
   const s = size || 24;
   const pathFn = ICON_PATHS[id];
   if (!pathFn) return id;
-  // Get theme colors
   const tc = THEME_COLORS[currentTheme] || THEME_COLORS.prateleira;
   const fillColor = tc[icon.color] || tc.primary;
   const strokeColor = tc.text;
@@ -394,8 +409,25 @@ function renderPlayerInputs() {
   const c = document.getElementById('player-names');
   const vals = Array.from(c.querySelectorAll('input')).map(i => i.value);
   c.innerHTML = '';
-  for (let i = 0; i < setup.playerCount; i++)
-    c.innerHTML += `<div class="player-row"><div class="player-badge p-color-${i}">P${i+1}</div><input type="text" class="form-input" placeholder="Jogador ${i+1}" value="${vals[i]||''}"></div>`;
+  for (let i = 0; i < setup.playerCount; i++) {
+    let placeholder = `Jogador ${i+1}`;
+    let value = vals[i] || '';
+    if (i === 0 && profile.nickname) {
+      placeholder = profile.nickname;
+      value = profile.nickname;
+    }
+    const avatarHtml = (i === 0 && profile.avatar)
+      ? `<img src="${profile.avatar}" style="width:100%;height:100%;object-fit:cover;">`
+      : `<span style="font-weight:700;font-size:0.7rem;">${i+1}</span>`;
+    const bgColor = (i === 0 && profile.avatar) ? 'transparent' : AVATAR_COLORS[i % AVATAR_COLORS.length];
+    c.innerHTML += `
+      <div class="player-row">
+        <div class="player-badge" style="background:${bgColor};border:1.5px solid var(--text);overflow:hidden;">
+          ${avatarHtml}
+        </div>
+        <input type="text" class="form-input" placeholder="${placeholder}" value="${value}">
+      </div>`;
+  }
 }
 
 function openSetup(gid) {
@@ -448,6 +480,12 @@ function closeSetup() {
 }
 
 function saveGame() {
+  const saveBtn = document.querySelector('.modal-save');
+  if (saveBtn && saveBtn.disabled) {
+    toast('Aguarde o processamento da imagem');
+    return;
+  }
+
   const name = document.getElementById('setup-name').value.trim();
   if (!name) { SFX.error(); toast('Dê um nome ao jogo!'); return; }
   const players = Array.from(document.querySelectorAll('#player-names input')).map((inp,i) => inp.value.trim() || `Jogador ${i+1}`);
@@ -479,10 +517,8 @@ function saveGame() {
   toast(state.editingGameId ? 'Jogo atualizado ✓' : 'Jogo criado ✓');
 }
 
-// ════════════════════════════════════════
-//  LIBRARY
-// ════════════════════════════════════════
-const TM = { cartas:'Cartas', tabuleiro:'Tabuleiro', dados:'Dados' };
+// LIBRARY
+const TM = { cartas:'Cartas', tabuleiro:'Tabuleiro', dados:'Dados', palavras:'Palavras' };
 
 function renderLibrary() {
   const list = document.getElementById('game-list');
@@ -509,16 +545,13 @@ function renderLibrary() {
 }
 
 function deleteGame(id) {
-  if (!confirm('Excluir este jogo?')) return;
   SFX.remove();
   state.games = state.games.filter(g => g.id !== id);
   save(); renderLibrary();
   toast('Jogo excluído');
 }
 
-// ════════════════════════════════════════
-//  GAMEPLAY
-// ════════════════════════════════════════
+// GAMEPLAY
 function startMatch(gid) {
   const g = state.games.find(x => x.id === gid);
   if (!g) return;
@@ -532,8 +565,16 @@ function startMatch(gid) {
     wpPosX: g.wpPosX ?? 50, wpPosY: g.wpPosY ?? 50, wpZoom: g.wpZoom ?? 100,
     rounds: [], scores: g.players.map(() => 0),
     log: [],
-    startedAt: new Date().toISOString()
+    startedAt: new Date().toISOString(),
+    participants: [],
+    isHost: true
   };
+  state.currentMatch.participants.push({
+    nickname: profile.nickname || 'Anfitrião',
+    avatar: profile.avatar || '',
+    isHost: true,
+    slot: 0
+  });
   navTo('play');
   resetTimer(); timerLimit = 0;
   renderPlay();
@@ -554,12 +595,63 @@ function renderPlay() {
   el.style.display = 'block';
   const sorted = getSorted(m);
   const fontCSS = getFontCSS(m.font);
+  const isHost = m.isHost;
 
-  // Smart rules panel
+  let roundHTML = `
+    <div class="card">
+      <div class="round-header">
+        <span class="round-title">Nova rodada</span>
+        <span class="round-num">R${m.rounds.length+1}</span>
+      </div>
+      ${m.players.map((name, i) => {
+        const part = m.participants.find(p => p.slot === i);
+        let avatarContent = '<i class="ph ph-user" style="font-size:1rem;display:flex;align-items:center;justify-content:center;height:100%;"></i>';
+        let bgColor = 'var(--primary)';
+        if (part) {
+          if (part.avatar) {
+            avatarContent = `<img src="${part.avatar}" style="width:100%;height:100%;object-fit:cover;">`;
+            bgColor = 'transparent';
+          } else {
+            const color = getAvatarColor(part.nickname);
+            bgColor = color;
+          }
+        }
+        const isMySlot = part && part.nickname === profile.nickname;
+        const isDisabled = !isHost && !isMySlot;
+        return `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <div style="display:flex;align-items:center;gap:6px;flex:1;">
+              <div style="width:26px;height:26px;border-radius:50%;background:${bgColor};border:1.5px solid var(--text);overflow:hidden;flex-shrink:0;">
+                ${avatarContent}
+              </div>
+              <span class="round-row-name" style="font-weight:600;">${name}</span>
+              ${part ? `<span style="font-size:0.6rem;color:var(--text-3);">(${part.nickname})</span>` : `<span style="font-size:0.6rem;color:var(--text-3);">(vago)</span>`}
+              ${part && part.isHost ? `<span style="font-size:0.6rem;color:var(--primary);">👑</span>` : ''}
+            </div>
+            <input type="number" id="ri-${i}" value="0" inputmode="numeric" onfocus="this.select()" ${isDisabled ? 'disabled' : ''} style="width:70px;text-align:center;padding:6px;border-radius:8px;border:1.5px solid var(--border);background:${isDisabled ? 'var(--surface-3)' : 'var(--surface-2)'};">
+          </div>
+          <div style="padding-left:38px;margin-top:-4px;margin-bottom:10px;">
+            <input type="text" class="form-input" id="rn-${i}" placeholder="Anotação: ex. trinca de copas, par de reis..." style="font-size:0.75rem;padding:7px 10px;border-radius:8px;" ${isDisabled ? 'disabled' : ''}>
+          </div>
+        `;
+      }).join('')}
+      <button class="btn btn-primary btn-block btn-round mt-12" onclick="confirmRound()"><i class="ph ph-check"></i> Confirmar Rodada</button>
+    </div>
+  `;
+
   let smartPanel = '';
   if (m.formulas && m.formulas.length) {
-    const playerOpts = m.players.map((p,pi) =>
-      `<option value="${pi}">${p.split(' ')[0]}</option>`).join('');
+    let playerOpts = '';
+    if (isHost) {
+      playerOpts = m.players.map((p,pi) => `<option value="${pi}">${p}</option>`).join('');
+    } else {
+      const myPart = m.participants.find(p => p.nickname === profile.nickname);
+      if (myPart) {
+        playerOpts = `<option value="${myPart.slot}">${m.players[myPart.slot]}</option>`;
+      } else {
+        playerOpts = `<option value="0">${m.players[0]}</option>`;
+      }
+    }
     const chips = m.formulas.map((f,fi) =>
       `<button class="formula-chip" onclick="applyFormula(${fi})">${f.label} <strong>${f.value>0?'+':''}${f.value}</strong></button>`
     ).join('');
@@ -577,7 +669,7 @@ function renderPlay() {
       </div>`;
   }
 
-  el.innerHTML = `
+  const heroHTML = `
     <div class="play-hero${m.wallpaper ? ' has-wallpaper' : ''}">
       ${m.wallpaper ? `<div class="play-hero-bg" style="background-image:url('${m.wallpaper}');background-position:${m.wpPosX??50}% ${m.wpPosY??50}%;background-size:${m.wpZoom??100}%;"></div>` : ''}
       <span class="play-emoji">${getIconSVG(m.emoji, 48)}</span>
@@ -588,7 +680,9 @@ function renderPlay() {
         <span>${m.scoring==='high'?'↑ Maior':'↓ Menor'}</span>
       </div>
     </div>
+  `;
 
+  const timerHTML = `
     <div class="card" id="timer-card">
       <div class="flex-between">
         <div>
@@ -607,7 +701,9 @@ function renderPlay() {
         <button class="btn btn-ghost btn-sm btn-round" style="flex:1;font-size:0.72rem;" onclick="setTimerLimit()"><i class="ph ph-hourglass"></i> Definir limite</button>
       </div>
     </div>
+  `;
 
+  const scoreHTML = `
     <div class="card">
       <div class="card-title"><i class="ph ph-trophy"></i> Placar</div>
       ${sorted.map((p,rank) => `
@@ -617,10 +713,11 @@ function renderPlay() {
           <span class="score-total" id="sv-${p.idx}">${p.score}</span>
         </div>`).join('')}
     </div>
+  `;
 
-    ${smartPanel}
-
-    ${m.log && m.log.length ? `
+  let logHTML = '';
+  if (m.log && m.log.length) {
+    logHTML = `
       <div class="card" id="log-card">
         <div class="card-title"><i class="ph ph-receipt"></i> Registro de pontuação</div>
         ${m.log.map((entry, li) => ({entry, li})).reverse().map(({entry, li}) => `
@@ -628,29 +725,15 @@ function renderPlay() {
             <span style="color:var(--text-2);"><strong style="color:var(--text);">${m.players[entry.player].split(' ')[0]}</strong> — ${entry.label}</span>
             <span style="display:flex;align-items:center;gap:8px;">
               <span style="font-family:'JetBrains Mono',monospace;color:${entry.value>=0?'var(--secondary)':'var(--accent)'};">${entry.value>0?'+':''}${entry.value}</span>
-              <button class="btn btn-ghost btn-sm" style="padding:2px 6px;" onclick="removeLogEntry(${li})" title="Desfazer"><i class="ph ph-x"></i></button>
+              ${isHost ? `<button class="btn btn-ghost btn-sm" style="padding:2px 6px;" onclick="removeLogEntry(${li})" title="Desfazer"><i class="ph ph-x"></i></button>` : ''}
             </span>
           </div>`).join('')}
-      </div>` : ''}
+      </div>`;
+  }
 
-    <div class="card">
-      <div class="round-header">
-        <span class="round-title">Nova rodada</span>
-        <span class="round-num">R${m.rounds.length+1}</span>
-      </div>
-      ${m.players.map((name,i) => `
-        <div class="round-row" style="flex-wrap:wrap;">
-          <div class="player-badge p-color-${i}" style="width:26px;height:26px;font-size:0.6rem;">P${i+1}</div>
-          <span class="round-row-name">${name}</span>
-          <input type="number" id="ri-${i}" value="0" inputmode="numeric" onfocus="this.select()">
-        </div>
-        <div style="padding-left:38px;margin-top:-4px;margin-bottom:10px;">
-          <input type="text" class="form-input" id="rn-${i}" placeholder="Anotação: ex. trinca de copas, par de reis..." style="font-size:0.75rem;padding:7px 10px;border-radius:8px;">
-        </div>`).join('')}
-      <button class="btn btn-primary btn-block btn-round mt-12" onclick="confirmRound()"><i class="ph ph-check"></i> Confirmar Rodada</button>
-    </div>
-
-    ${m.rounds.length > 0 ? `
+  let historyRoundsHTML = '';
+  if (m.rounds.length > 0) {
+    historyRoundsHTML = `
       <div class="card">
         <div class="card-title"><i class="ph ph-list-bullets"></i> Histórico de rodadas</div>
         ${m.rounds.map((r,ri) => `
@@ -663,13 +746,18 @@ function renderPlay() {
             </div>
             ${r.notes && r.notes.some(n=>n) ? `<div style="padding-left:30px;font-size:0.68rem;color:var(--text-3);line-height:1.5;">${r.notes.map((n,pi) => n ? `<div><span style="color:var(--text-2);font-weight:600;">${m.players[pi].split(' ')[0]}:</span> ${n}</div>` : '').join('')}</div>` : ''}
           </div>`).join('')}
-      </div>` : ''}
+      </div>`;
+  }
 
+  let actionBar = `
     <div class="action-bar">
       ${m.rules||m.formulas?.length ? `<button class="btn btn-ghost btn-sm btn-round" onclick="showRules()"><i class="ph ph-scroll"></i> Regras</button>` : ''}
       <button class="btn btn-ghost btn-sm btn-round" onclick="openRoomModal()"><i class="ph ph-users-three"></i> ${m.roomCode ? 'Sala '+m.roomCode : 'Compartilhar'}</button>
-      <button class="btn btn-danger btn-sm btn-round" style="margin-left:auto;" onclick="endMatch()"><i class="ph ph-stop"></i> Encerrar</button>
-    </div>`;
+      ${isHost ? `<button class="btn btn-danger btn-sm btn-round" style="margin-left:auto;" onclick="endMatch()"><i class="ph ph-stop"></i> Encerrar</button>` : ''}
+    </div>
+  `;
+
+  el.innerHTML = heroHTML + timerHTML + scoreHTML + smartPanel + logHTML + roundHTML + historyRoundsHTML + actionBar;
 }
 
 function applyFormula(fi) {
@@ -677,6 +765,14 @@ function applyFormula(fi) {
   if (!m) return;
   const f = m.formulas[fi];
   const playerIdx = parseInt(document.getElementById('formula-player')?.value ?? 0);
+  const isHost = m.isHost;
+  if (!isHost) {
+    const myPart = m.participants.find(p => p.nickname === profile.nickname);
+    if (!myPart || myPart.slot !== playerIdx) {
+      toast('Você só pode aplicar regras para você mesmo');
+      return;
+    }
+  }
   m.scores[playerIdx] += f.value;
   if (!m.log) m.log = [];
   m.log.push({ player: playerIdx, label: f.label, value: f.value, ts: new Date().toISOString() });
@@ -709,16 +805,16 @@ function renderLogCard() {
   const m = state.currentMatch;
   if (!m) return;
   let card = document.getElementById('log-card');
+  const isHost = m.isHost;
   const html = m.log.map((entry, li) => ({entry, li})).reverse().map(({entry, li}) => `
     <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.8rem;">
       <span style="color:var(--text-2);"><strong style="color:var(--text);">${m.players[entry.player].split(' ')[0]}</strong> — ${entry.label}</span>
       <span style="display:flex;align-items:center;gap:8px;">
         <span style="font-family:'JetBrains Mono',monospace;color:${entry.value>=0?'var(--secondary)':'var(--accent)'};">${entry.value>0?'+':''}${entry.value}</span>
-        <button class="btn btn-ghost btn-sm" style="padding:2px 6px;" onclick="removeLogEntry(${li})" title="Desfazer"><i class="ph ph-x"></i></button>
+        ${isHost ? `<button class="btn btn-ghost btn-sm" style="padding:2px 6px;" onclick="removeLogEntry(${li})" title="Desfazer"><i class="ph ph-x"></i></button>` : ''}
       </span>
     </div>`).join('');
   if (!card && m.log.length) {
-    // card doesn't exist yet, need a full re-render to insert it in the right place
     renderPlay();
     return;
   }
@@ -741,7 +837,6 @@ function confirmRound() {
   if (!m) return;
   const scores = m.players.map((_,i) => parseInt(document.getElementById(`ri-${i}`)?.value)||0);
   const notes = m.players.map((_,i) => document.getElementById(`rn-${i}`)?.value?.trim()||'');
-  // Store round as object with scores + notes
   m.rounds.push({ scores, notes });
   scores.forEach((s,i) => m.scores[i] += s);
   SFX.score();
@@ -763,6 +858,7 @@ function confirmRound() {
 function endMatch() {
   const m = state.currentMatch;
   if (!m) return;
+  if (!m.isHost) { toast('Apenas o anfitrião pode encerrar a partida'); return; }
   const hasActivity = m.rounds.length > 0 || (m.log && m.log.length > 0);
   if (!hasActivity && !confirm('Nenhuma rodada registrada. Encerrar assim mesmo?')) return;
   const sorted = getSorted(m);
@@ -835,9 +931,7 @@ function showRules() {
 }
 function closeRulesModal() { document.getElementById('rules-modal').classList.remove('active'); }
 
-// ════════════════════════════════════════
-//  HISTORY
-// ════════════════════════════════════════
+// HISTORY
 function renderHistory() {
   const list = document.getElementById('history-list');
   const empty = document.getElementById('empty-history');
@@ -939,7 +1033,6 @@ function showDetail(id) {
 
 function closeDetail() { document.getElementById('detail-modal').classList.remove('active'); }
 function delMatch(id) {
-  if (!confirm('Excluir partida?')) return false;
   SFX.remove();
   state.matches = state.matches.filter(m => m.id !== id);
   save(); renderHistory();
@@ -954,9 +1047,7 @@ function replay(id) {
   else toast('Jogo não encontrado');
 }
 
-// ════════════════════════════════════════
-//  SALA COMPARTILHADA (multiplayer em tempo real)
-// ════════════════════════════════════════
+// ROOM
 let roomChannel = null;
 
 function genRoomCode() {
@@ -968,6 +1059,40 @@ function genRoomCode() {
 
 function roomLink(code) {
   return `${window.location.origin}${window.location.pathname}?sala=${code}`;
+}
+
+function renderRoomParticipants() {
+  const m = state.currentMatch;
+  const body = document.getElementById('room-modal-body');
+  if (!m || !m.participants || !body) return;
+  const existing = body.querySelector('.room-participants');
+  if (existing) existing.remove();
+  const html = `
+    <div class="room-participants" style="display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;">
+      ${m.participants.map(p => {
+        const bgColor = p.avatar ? 'transparent' : getAvatarColor(p.nickname);
+        const avatarContent = p.avatar
+          ? `<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;">`
+          : `<i class="ph ph-user" style="font-size:1rem;display:flex;align-items:center;justify-content:center;height:100%;color:#fff;"></i>`;
+        return `
+          <div style="display:flex;align-items:center;gap:6px;background:var(--surface-2);border-radius:20px;padding:4px 12px 4px 4px;border:1.5px solid ${p.isHost ? 'var(--primary)' : 'var(--border)'};">
+            <div style="width:30px;height:30px;border-radius:50%;background:${bgColor};border:1.5px solid var(--text);overflow:hidden;">
+              ${avatarContent}
+            </div>
+            <span style="font-size:0.8rem;font-weight:600;">${p.nickname}</span>
+            ${p.isHost ? '<span style="font-size:0.6rem;color:var(--primary);">👑</span>' : ''}
+            <span style="font-size:0.6rem;color:var(--text-3);">(Jogador ${p.slot+1})</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+  const btns = body.querySelector('.btn-block');
+  if (btns) {
+    btns.insertAdjacentHTML('beforebegin', html);
+  } else {
+    body.insertAdjacentHTML('afterbegin', html);
+  }
 }
 
 function openRoomModal() {
@@ -982,6 +1107,7 @@ function openRoomModal() {
       <div style="text-align:center;font-size:2rem;font-weight:800;letter-spacing:6px;font-family:'JetBrains Mono',monospace;color:var(--primary-dim);margin-bottom:12px;">${m.roomCode}</div>
       <button class="btn btn-primary btn-block btn-round" onclick="copyRoomLink()"><i class="ph ph-link"></i> Copiar link de convite</button>
       <button class="btn btn-ghost btn-block btn-round mt-12" onclick="leaveRoom()"><i class="ph ph-sign-out"></i> Sair da sala</button>`;
+    renderRoomParticipants();
   } else {
     body.innerHTML = `
       <p style="font-size:0.82rem;color:var(--text-2);margin-bottom:14px;line-height:1.5;">
@@ -991,6 +1117,7 @@ function openRoomModal() {
   }
   document.getElementById('room-modal').classList.add('active');
 }
+
 function closeRoomModal(e) {
   if (!e || e.target === document.getElementById('room-modal'))
     document.getElementById('room-modal').classList.remove('active');
@@ -1000,17 +1127,79 @@ function subscribeRoom(code, isHost) {
   if (!sb) { toast('Supabase não disponível'); return; }
   if (roomChannel) { sb.removeChannel(roomChannel); roomChannel = null; }
   roomChannel = sb.channel(`tt-sala-${code}`, { config: { broadcast: { self: false } } });
+
   roomChannel.on('broadcast', { event: 'sync' }, ({ payload }) => {
     const wasEnded = payload.ended;
     state.currentMatch = wasEnded ? null : { ...payload, isHost };
+    if (payload.participants) {
+      state.currentMatch.participants = payload.participants;
+    }
+    if (!wasEnded && payload.participants) {
+      const myProfile = {
+        nickname: profile.nickname || `Anônimo${payload.participants.length+1}`,
+        avatar: profile.avatar || '',
+        isHost: isHost,
+        slot: -1
+      };
+      if (!payload.participants.some(p => p.nickname === myProfile.nickname)) {
+        roomChannel.send({
+          type: 'broadcast',
+          event: 'join-request',
+          payload: myProfile
+        });
+      }
+    }
     if (wasEnded) { toast('O anfitrião encerrou a partida'); navTo('history'); renderHistory(); }
     else if (document.getElementById('view-play').classList.contains('active') || !isHost) {
       navTo('play'); renderPlay();
     }
+    if (document.getElementById('room-modal').classList.contains('active')) {
+      renderRoomParticipants();
+    }
   });
+
+  roomChannel.on('broadcast', { event: 'join-request' }, ({ payload }) => {
+    if (state.currentMatch && state.currentMatch.isHost) {
+      const m = state.currentMatch;
+      if (m.participants.some(p => p.nickname === payload.nickname)) return;
+      const usedSlots = m.participants.map(p => p.slot);
+      let freeSlot = -1;
+      for (let i = 0; i < m.players.length; i++) {
+        if (!usedSlots.includes(i)) { freeSlot = i; break; }
+      }
+      if (freeSlot === -1) {
+        toast('Sala lotada!');
+        return;
+      }
+      const newPart = { ...payload, slot: freeSlot, isHost: false };
+      m.participants.push(newPart);
+      broadcastState();
+      toast(`${payload.nickname} entrou na sala!`);
+      renderPlay();
+      renderRoomParticipants();
+    }
+  });
+
+  roomChannel.on('broadcast', { event: 'add-participant' }, ({ payload }) => {
+    if (state.currentMatch) {
+      if (!state.currentMatch.participants) state.currentMatch.participants = [];
+      if (!state.currentMatch.participants.some(p => p.nickname === payload.nickname)) {
+        state.currentMatch.participants.push(payload);
+        if (document.getElementById('room-modal').classList.contains('active')) {
+          renderRoomParticipants();
+        }
+        if (document.getElementById('view-play').classList.contains('active')) {
+          renderPlay();
+        }
+        toast(`${payload.nickname} entrou na sala!`);
+      }
+    }
+  });
+
   roomChannel.on('broadcast', { event: 'request-sync' }, () => {
     if (isHost) broadcastState();
   });
+
   roomChannel.subscribe();
 }
 
@@ -1018,17 +1207,18 @@ function createRoom() {
   const m = state.currentMatch;
   if (!m) return;
   const code = genRoomCode();
-  m.roomCode = code; m.isHost = true;
+  m.roomCode = code;
+  m.isHost = true;
   subscribeRoom(code, true);
   SFX.confirm();
-  setTimeout(broadcastState, 400); // dá tempo do subscribe confirmar
+  setTimeout(broadcastState, 400);
   openRoomModal();
 }
 
 function leaveRoom() {
   const m = state.currentMatch;
   if (roomChannel) { sb?.removeChannel(roomChannel); roomChannel = null; }
-  if (m) { m.roomCode = null; m.isHost = false; }
+  if (m) { m.roomCode = null; m.isHost = false; m.participants = []; }
   closeRoomModal();
   toast('Você saiu da sala');
   renderPlay();
@@ -1076,7 +1266,6 @@ function joinRoom(code) {
   }, 2500);
 }
 
-// Entrar automaticamente se o link tiver ?sala=CODIGO
 (function checkRoomFromURL() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('sala');
@@ -1088,9 +1277,7 @@ function joinRoom(code) {
   }
 })();
 
-// ════════════════════════════════════════
-//  PERFIL
-// ════════════════════════════════════════
+// PERFIL
 let profile = { nickname: '', avatar: '' };
 function loadProfile() {
   try { profile = { ...profile, ...JSON.parse(localStorage.getItem('tt_profile') || '{}') }; } catch(e) {}
@@ -1137,23 +1324,28 @@ function renderProfile() {
   const wEl = document.getElementById('stat-wins'); if (wEl) wEl.textContent = wins;
 }
 
-// ════════════════════════════════════════
-//  MUSIC PLAYER
-// ════════════════════════════════════════
+// MUSIC PLAYER
+function ytVideoId(url) {
+  try {
+    const u = new URL(url);
+    if (u.pathname.startsWith('/live/')) {
+      return u.pathname.split('/')[2]?.split('?')[0] || '';
+    }
+    if (u.hostname.includes('youtu.be')) {
+      return u.pathname.slice(1).split('?')[0];
+    }
+    return u.searchParams.get('v') || '';
+  } catch {
+    return '';
+  }
+}
+
 let musicPlaying = false;
 
 function openMusicModal() { document.getElementById('music-modal').classList.add('active'); }
 function closeMusicModal(e) {
   if (e.target === document.getElementById('music-modal'))
     document.getElementById('music-modal').classList.remove('active');
-}
-
-function ytVideoId(url) {
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes('youtu.be')) return u.pathname.slice(1).split('?')[0];
-    return u.searchParams.get('v') || '';
-  } catch { return ''; }
 }
 
 function loadMusic() {
@@ -1163,8 +1355,6 @@ function loadMusic() {
   if (!vid) { toast('URL inválida — use youtube.com ou youtu.be'); return; }
   const frame = document.getElementById('yt-frame');
   const container = document.getElementById('yt-container');
-  // Lives 24/7 quebram com loop+playlist (o YouTube tenta achar uma "gravação"
-  // da live que não existe). Só aplicamos loop em vídeos normais.
   frame.src = `https://www.youtube.com/embed/${vid}?autoplay=1&controls=1&loop=0`;
   container.style.display = 'block';
   musicPlaying = true;
@@ -1188,14 +1378,11 @@ function stopMusic() {
   toast('Música pausada');
 }
 
-// ════════════════════════════════════════
-//  SUPABASE CLIENT
-// ════════════════════════════════════════
+// SUPABASE
 const SUPABASE_URL = 'https://obnxqnllrrkoznxxnwkh.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ibnhxbmxscnJrb3pueHhud2toIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzIwMzIsImV4cCI6MjA5OTU0ODAzMn0.Yy94y6YVXnHYMbunney-hCCp5NbYtNTozaLKuCnXUrQ';
 let sb = null;
 try {
-  // CDN v2 exposes window.supabase.createClient
   const mod = window.supabase;
   if (mod && mod.createClient) {
     sb = mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1204,9 +1391,7 @@ try {
   }
 } catch(e) { console.warn('Supabase init failed:', e); }
 
-// ════════════════════════════════════════
-//  AUTH: Google OAuth + Email/Password
-// ════════════════════════════════════════
+// AUTH
 async function loginWithGoogle() {
   if (!sb) { toast('Supabase não disponível'); return; }
   try {
@@ -1249,13 +1434,13 @@ async function authAction(action) {
 async function updateAuthUI() {
   if (!sb) return;
   const { data: { session } } = await sb.auth.getSession();
+  const authCard = document.getElementById('auth-card');
   const loggedDiv = document.getElementById('auth-logged');
   const contentDiv = document.getElementById('auth-content');
-  if (!loggedDiv || !contentDiv) return;
 
   if (session?.user) {
-    contentDiv.style.display = 'none';
-    loggedDiv.style.display = '';
+    if (authCard) authCard.style.display = 'none';
+    if (loggedDiv) loggedDiv.style.display = '';
     const user = session.user;
     const emailEl = document.getElementById('auth-user-email');
     const avatarEl = document.getElementById('auth-avatar');
@@ -1264,12 +1449,11 @@ async function updateAuthUI() {
       avatarEl.innerHTML = `<img src="${user.user_metadata.avatar_url}" style="width:100%;height:100%;object-fit:cover;">`;
     }
   } else {
-    contentDiv.style.display = '';
-    loggedDiv.style.display = 'none';
+    if (authCard) authCard.style.display = '';
+    if (loggedDiv) loggedDiv.style.display = 'none';
   }
 }
 
-// Listen for auth state changes (handles redirect from Google OAuth)
 if (sb) {
   sb.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN') {
@@ -1282,28 +1466,22 @@ if (sb) {
       updateAuthUI();
     }
   });
-  // Check session on load
   updateAuthUI();
 }
 
-// ════════════════════════════════════════
-//  SETTINGS: GRAIN TOGGLE
-// ════════════════════════════════════════
+// SETTINGS: GRAIN TOGGLE
 let grainEnabled = localStorage.getItem('tt_grain') !== 'off';
 function toggleGrain(on) {
   grainEnabled = on;
   localStorage.setItem('tt_grain', on ? 'on' : 'off');
   document.body.classList.toggle('no-grain', !on);
 }
-// Apply saved grain setting
 if (!grainEnabled) {
   document.body.classList.add('no-grain');
   setTimeout(() => { const g = document.getElementById('grain-toggle'); if(g) g.checked = false; }, 0);
 }
 
-// ════════════════════════════════════════
-//  SETTINGS: DATA EXPORT / CLEAR
-// ════════════════════════════════════════
+// SETTINGS: DATA EXPORT / CLEAR
 function exportData() {
   const data = JSON.stringify({ games: state.games, matches: state.matches }, null, 2);
   const blob = new Blob([data], { type: 'application/json' });
@@ -1315,18 +1493,15 @@ function exportData() {
 }
 
 function clearAllData() {
-  if (!confirm('Limpar TODOS os jogos e partidas? Esta ação é irreversível.')) return;
   state.games = []; state.matches = []; state.currentMatch = null;
   save(); renderLibrary(); renderHistory(); renderPlay();
   SFX.remove(); toast('Dados limpos');
 }
 
-// ════════════════════════════════════════
-//  MATCH TIMER
-// ════════════════════════════════════════
+// MATCH TIMER
 let timerInterval = null;
 let timerSeconds = 0;
-let timerLimit = 0; // 0 = no limit, just count up
+let timerLimit = 0;
 
 function startTimer() {
   if (timerInterval) return;
@@ -1382,190 +1557,24 @@ function setTimerLimit() {
   toast(mins > 0 ? `Limite: ${mins} minutos` : 'Sem limite de tempo');
 }
 
-// ════════════════════════════════════════
-//  GAME TEMPLATES (jogos prontos)
-// ════════════════════════════════════════
-const GAME_TEMPLATES = [
-  {
-    name: 'Truco',
-    emoji: 'cards',
-    type: 'cartas',
-    scoring: 'high',
-    players: ['Dupla 1', 'Dupla 2'],
-    font: 'fredoka',
-    rules: 'Jogo de truco paulista. Ganha quem fizer 12 pontos primeiro. Truco vale 3, seis vale 6, nove vale 9, doze vale 12. Manilhas: ♦ > ♠ > ♥ > ♣.',
-    formulas: [
-      { label: 'Rodada normal', value: 1 },
-      { label: 'Truco aceito', value: 3 },
-      { label: 'Seis aceito', value: 6 },
-      { label: 'Nove aceito', value: 9 },
-      { label: 'Doze aceito', value: 12 },
-    ]
-  },
-  {
-    name: 'UNO',
-    emoji: 'cards',
-    type: 'cartas',
-    scoring: 'low',
-    players: ['Jogador 1', 'Jogador 2', 'Jogador 3'],
-    font: 'unbounded',
-    rules: 'Quem ficar sem cartas primeiro grita UNO e vence a rodada. Pontos são contados pelas cartas restantes na mão dos outros jogadores. Cartas numéricas = valor da face. Bloqueio/Inverter/+2 = 20pts. Coringa/+4 = 50pts.',
-    formulas: [
-      { label: 'Carta numérica (valor)', value: 1 },
-      { label: 'Bloqueio / Inverter / +2', value: 20 },
-      { label: 'Coringa / +4', value: 50 },
-    ]
-  },
-  {
-    name: 'Catan',
-    emoji: 'dice',
-    type: 'tabuleiro',
-    scoring: 'high',
-    players: ['Jogador 1', 'Jogador 2', 'Jogador 3'],
-    font: 'playfair',
-    rules: 'Primeiro a 10 pontos de vitória vence. Pontos: 1 por cidade pequena, 2 por cidade grande, 2 para estrada mais longa (mín 5), 2 para maior exército (mín 3 cavaleiros), 1 por carta de ponto de vitória.',
-    formulas: [
-      { label: 'Vila', value: 1 },
-      { label: 'Cidade', value: 2 },
-      { label: 'Estrada mais longa', value: 2 },
-      { label: 'Maior exército', value: 2 },
-      { label: 'Carta de PV', value: 1 },
-    ]
-  },
-  {
-    name: 'Buraco',
-    emoji: 'cards',
-    type: 'cartas',
-    scoring: 'high',
-    players: ['Dupla 1', 'Dupla 2'],
-    font: 'playfair',
-    rules: 'Jogo de canastra/buraco. Forme sequências e trincas. Ganha quem bater primeiro. Buraco limpo (sem coringa) vale mais. Objetivo: 3000 pontos.',
-    formulas: [
-      { label: 'Trinca/sequência (mesma cor)', value: 3 },
-      { label: 'Trinca/sequência (cores diferentes)', value: 5 },
-      { label: 'Sequência de mesma cor', value: 5 },
-      { label: 'Buraco limpo', value: 200 },
-      { label: 'Buraco sujo', value: 100 },
-      { label: 'Batida simples', value: 100 },
-      { label: 'Batida direta', value: 200 },
-      { label: 'Carta especial (10pts)', value: 10 },
-    ]
-  },
-  {
-    name: 'Rummikub',
-    emoji: 'puzzle',
-    type: 'tabuleiro',
-    scoring: 'high',
-    players: ['Jogador 1', 'Jogador 2', 'Jogador 3', 'Jogador 4'],
-    font: 'fredoka',
-    rules: 'Forme grupos (mesma número, cores diferentes) ou sequências (mesma cor, números consecutivos) de no mínimo 3 peças. Quem esvaziar a mão primeiro vence. Pontos das peças restantes dos outros são somados ao vencedor.',
-    formulas: [
-      { label: 'Mesma cor, números diferentes', value: 3 },
-      { label: 'Cores diferentes, mesmo número', value: 8 },
-      { label: 'Mesma cor, sequência', value: 5 },
-      { label: 'Carta especial (coringa)', value: 10 },
-    ]
-  },
-  {
-    name: 'War',
-    emoji: 'flag',
-    type: 'tabuleiro',
-    scoring: 'high',
-    players: ['Jogador 1', 'Jogador 2', 'Jogador 3'],
-    font: 'syne',
-    rules: 'Conquiste territórios e cumpra seu objetivo secreto. Cada turno: receba exércitos, ataque territórios vizinhos e mova tropas.',
-    formulas: [
-      { label: 'Território conquistado', value: 1 },
-      { label: 'Continente completo', value: 5 },
-      { label: 'Objetivo cumprido (vitória)', value: 50 },
-    ]
-  },
-  {
-    name: 'Dominó',
-    emoji: 'dice',
-    type: 'tabuleiro',
-    scoring: 'low',
-    players: ['Jogador 1', 'Jogador 2', 'Jogador 3', 'Jogador 4'],
-    font: 'mono',
-    rules: 'Distribua 7 pedras para cada. Jogue pedras com pontas iguais. Quem ficar sem pedras primeiro vence. Se trancar, vence quem tiver menor soma.',
-    formulas: [
-      { label: 'Batida normal', value: -1 },
-      { label: 'Batida de carroça', value: -2 },
-      { label: 'Lá e cá', value: -3 },
-      { label: 'Cruzada', value: -5 },
-    ]
-  },
-  {
-    name: 'Jogo Personalizado',
-    emoji: 'star',
-    type: 'cartas',
-    scoring: 'high',
-    players: ['Jogador 1', 'Jogador 2'],
-    font: 'playfair',
-    rules: '',
-    formulas: []
-  },
-];
+// ROUTING
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash.slice(1) || 'library';
+  if (['library','play','history','settings'].includes(hash)) {
+    navTo(hash);
+  }
+});
 
-function openTemplates() {
-  const modal = document.getElementById('templates-modal');
-  const list = document.getElementById('templates-list');
-  list.innerHTML = GAME_TEMPLATES.map((t, i) => `
-    <div class="game-item" onclick="useTemplate(${i})" style="cursor:pointer;">
-      <div class="game-item-emoji">${getIconSVG(t.emoji, 28)}</div>
-      <div class="game-item-info">
-        <div class="game-item-name">${t.name}</div>
-        <div class="game-item-meta">
-          <span class="tag">${TM[t.type]}</span>
-          <span>${t.players.length} jogadores</span>
-          ${t.formulas.length ? `<span><i class="ph ph-lightning"></i> ${t.formulas.length} regras</span>` : ''}
-        </div>
-      </div>
-      <div style="color:var(--primary);font-size:1rem;"><i class="ph ph-plus-circle"></i></div>
-    </div>`).join('');
-  modal.classList.add('active');
-}
-
-function closeTemplates() {
-  document.getElementById('templates-modal').classList.remove('active');
-}
-
-function useTemplate(i) {
-  const t = GAME_TEMPLATES[i];
-  closeTemplates();
-  state.editingGameId = null;
-  setup = {
-    emoji: t.emoji, type: t.type, scoring: t.scoring,
-    playerCount: t.players.length,
-    font: t.font || 'playfair',
-    wallpaper: '', wpPosX:50, wpPosY:50, wpZoom:100,
-    formulas: JSON.parse(JSON.stringify(t.formulas || []))
-  };
-  document.getElementById('setup-name').value = t.name === 'Jogo Personalizado' ? '' : t.name;
-  document.getElementById('setup-rules').value = t.rules || '';
-  document.getElementById('setup-wallpaper').value = '';
-  document.getElementById('setup-modal-title').textContent = 'Novo Jogo';
-  applyWallpaperPreview('');
-  initEmojiGrid();
-  initFontGrid();
-  renderFormulaEditor();
-  document.getElementById('player-count-display').textContent = setup.playerCount;
-  renderPlayerInputs();
-  setTimeout(() => {
-    const inputs = document.querySelectorAll('#player-names input');
-    t.players.forEach((p,idx) => { if (inputs[idx]) inputs[idx].value = p; });
-  }, 10);
-  document.querySelectorAll('.type-option').forEach(el => el.classList.toggle('selected', el.dataset.type === setup.type));
-  document.querySelectorAll('.scoring-option').forEach(el => el.classList.toggle('selected', el.dataset.scoring === setup.scoring));
-  SFX.tap();
-  document.getElementById('setup-modal').classList.add('active');
-}
-
-// ════════════════════════════════════════
-//  INIT
-// ════════════════════════════════════════
+// INIT
 load();
 loadProfile();
 renderLibrary();
 renderHistory();
 renderPlay();
+// If there's a hash on load, navigate to it
+const initHash = window.location.hash.slice(1) || 'library';
+if (['library','play','history','settings'].includes(initHash)) {
+  navTo(initHash);
+} else {
+  navTo('library');
+}
