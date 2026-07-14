@@ -436,6 +436,30 @@
   </div>
 </div>
 
+<!-- ROUND TRIGGER (shown during gameplay) -->
+<div class="round-trigger-fixed" id="round-trigger-fixed">
+  <button class="round-trigger-btn" onclick="openRoundSheet()">
+    <i class="ph ph-plus-circle" style="font-size:1.1rem;"></i>
+    Registrar rodada
+    <span class="round-trigger-badge" id="rt-badge">R1</span>
+  </button>
+</div>
+
+<!-- ROUND BOTTOM SHEET -->
+<div class="round-sheet-overlay" id="rs-overlay" onclick="closeRoundSheet()"></div>
+<div class="round-sheet" id="rs-panel">
+  <div class="rs-handle"></div>
+  <div class="rs-head">
+    <span class="rs-title">Nova Rodada</span>
+    <span class="rs-badge" id="rs-badge">R1</span>
+  </div>
+  <div id="rs-players"></div>
+  <button class="rs-confirm" onclick="confirmRound()"><i class="ph ph-check-circle"></i> Confirmar Rodada</button>
+</div>
+
+<!-- GAME STATUS BAR (populated by JS) -->
+<div class="game-status-bar" id="game-status-bar" style="display:none;"></div>
+
 <div class="toast" id="toast"></div>
 <div class="confetti-container" id="confetti"></div>
 

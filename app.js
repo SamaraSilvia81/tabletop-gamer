@@ -210,6 +210,12 @@ function navTo(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
   document.getElementById(`view-${v}`).classList.add('active');
   document.getElementById('fab-btn').style.display = v === 'library' ? 'grid' : 'none';
+  // Show/hide gameplay elements
+  const isPlay = v === 'play' && state.currentMatch;
+  const statusBar = document.getElementById('game-status-bar');
+  const roundTrigger = document.getElementById('round-trigger-fixed');
+  if (statusBar) statusBar.style.display = isPlay ? 'flex' : 'none';
+  if (roundTrigger) roundTrigger.style.display = (isPlay && state.currentMatch?.isHost) ? 'block' : 'none';
   if (v === 'settings') { buildThemeGrid('settings-theme-grid'); renderProfile(); }
   window.location.hash = v;
 }
@@ -610,14 +616,45 @@ function renderPlay() {
   const m = state.currentMatch;
   const el = document.getElementById('play-content');
   const empty = document.getElementById('play-empty');
-  if (!m) { empty.style.display='block'; el.style.display='none'; return; }
+  const statusBar = document.getElementById('game-status-bar');
+  const roundTrigger = document.getElementById('round-trigger-fixed');
+  if (!m) {
+    empty.style.display='block'; el.style.display='none';
+    statusBar.style.display='none';
+    roundTrigger.style.display='none';
+    return;
+  }
   empty.style.display = 'none';
   el.style.display = 'block';
   const sorted = getSorted(m);
   const fontCSS = getFontCSS(m.font);
   const isHost = m.isHost;
+  const maxScore = Math.max(...m.scores, 1);
+  const leaderName = sorted.length && m.rounds.length > 0 ? sorted[0].name.split(' ')[0] : '—';
 
-  // HERO COM WALLPAPER
+  // ── STATUS BAR ──
+  statusBar.style.display = 'flex';
+  statusBar.innerHTML = `
+    <div class="status-left">
+      <div class="status-icon">${getIconSVG(m.emoji, 16)}</div>
+      <span class="status-name">${m.gameName}</span>
+    </div>
+    <div class="status-pills">
+      <span class="s-pill"><i class="ph ph-list-numbers"></i> R${m.rounds.length}</span>
+      ${m.rounds.length > 0 ? `<span class="s-pill s-leader"><i class="ph ph-crown"></i> ${leaderName}</span>` : ''}
+    </div>
+  `;
+
+  // ── ROUND TRIGGER ──
+  if (isHost) {
+    roundTrigger.style.display = 'block';
+    document.getElementById('rt-badge').textContent = `R${m.rounds.length+1}`;
+  } else {
+    roundTrigger.style.display = 'none';
+  }
+  document.getElementById('rs-badge').textContent = `R${m.rounds.length+1}`;
+
+  // ── HERO ──
   const heroHTML = `
     <div class="play-hero${m.wallpaper ? ' has-wallpaper' : ''}">
       ${m.wallpaper ? `<div class="play-hero-bg" style="background-image:url('${m.wallpaper}');background-position:${m.wpPosX??50}% ${m.wpPosY??50}%;background-size:${(m.wpZoom??100) === 100 ? 'cover' : (m.wpZoom??100)+'%'};"></div>` : ''}
@@ -631,160 +668,180 @@ function renderPlay() {
     </div>
   `;
 
+  // ── TIMER RING ──
+  const timerModeActive = (mode) => (timerLimit === 0 && mode === 'infinite') || (timerLimit === 300 && mode === '5') || (timerLimit === 600 && mode === '10') || (timerLimit > 0 && timerLimit !== 300 && timerLimit !== 600 && mode === 'custom') ? ' active' : '';
+
   const timerHTML = `
-    <div class="card" id="timer-card">
-      <div class="flex-between">
-        <div>
-          <div class="card-title" style="margin-bottom:2px;"><i class="ph ph-timer"></i> Cronômetro</div>
-          <div style="font-size:0.68rem;color:var(--text-3);" id="timer-remaining">${timerLimit>0 ? 'com limite' : 'sem limite — só para contabilizar'}</div>
+    <div class="timer-hero">
+      <div class="timer-ring-wrap">
+        <svg class="timer-ring-svg" viewBox="0 0 200 200">
+          <circle class="timer-ring-bg" cx="100" cy="100" r="80"/>
+          <circle class="timer-ring-fill${timerLimit > 0 ? '' : ' t-infinite'}" cx="100" cy="100" r="80" id="timer-ring-fill"/>
+        </svg>
+        <div class="timer-center">
+          <div class="timer-big" id="timer-display">00:00</div>
+          <div class="timer-sub" id="timer-remaining">${timerLimit>0 ? 'com limite' : timerInterval ? 'em andamento' : 'pausado'}</div>
         </div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:700;color:var(--text);" id="timer-display">00:00</div>
       </div>
       ${isHost ? `
-      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
-        <button class="btn btn-primary btn-sm btn-round" style="flex:1;" onclick="startTimer()"><i class="ph ph-play"></i> Iniciar</button>
-        <button class="btn btn-ghost btn-sm btn-round" style="flex:1;" onclick="pauseTimer()"><i class="ph ph-pause"></i> Pausar</button>
-        <button class="btn btn-ghost btn-sm btn-round" style="flex:1;" onclick="resetTimer()"><i class="ph ph-arrow-counter-clockwise"></i> Zerar</button>
+      <div class="timer-btns">
+        <button class="t-btn" onclick="resetTimer()" title="Zerar"><i class="ph ph-arrow-counter-clockwise"></i></button>
+        <button class="t-btn t-play" id="t-play-btn" onclick="toggleTimerV2()"><i class="ph ph-${timerInterval ? 'pause' : 'play'}" id="t-play-icon"></i></button>
+        <button class="t-btn" onclick="setTimerLimit()" title="Definir limite"><i class="ph ph-hourglass"></i></button>
       </div>
-      <div style="display:flex;gap:6px;margin-top:6px;">
-        <button class="btn btn-ghost btn-sm btn-round" style="flex:1;font-size:0.72rem;" onclick="timerLimit=0;updateTimerDisplay();document.getElementById('timer-remaining').textContent='sem limite — só para contabilizar';toast('Modo: só contar');"><i class="ph ph-infinity"></i> Só contar</button>
-        <button class="btn btn-ghost btn-sm btn-round" style="flex:1;font-size:0.72rem;" onclick="setTimerLimit()"><i class="ph ph-hourglass"></i> Definir limite</button>
-      </div>` : `<div style="font-size:0.7rem;color:var(--text-3);margin-top:8px;">O anfitrião controla o cronômetro.</div>`}
+      <div class="timer-modes">
+        <button class="t-mode${timerModeActive('infinite')}" onclick="setTimerModeV2('infinite')"><i class="ph ph-infinity"></i> Livre</button>
+        <button class="t-mode${timerModeActive('5')}" onclick="setTimerModeV2('5')">5 min</button>
+        <button class="t-mode${timerModeActive('10')}" onclick="setTimerModeV2('10')">10 min</button>
+        <button class="t-mode${timerModeActive('custom')}" onclick="setTimerModeV2('custom')"><i class="ph ph-pencil-simple"></i></button>
+      </div>` : `<div style="font-size:0.68rem;color:var(--text-3);margin-top:10px;">O anfitrião controla o cronômetro</div>`}
     </div>
   `;
 
-  const scoreHTML = `
-    <div class="card">
-      <div class="card-title"><i class="ph ph-trophy"></i> Placar</div>
-      ${sorted.map((p,rank) => `
-        <div class="score-row ${rank===0&&m.rounds.length>0?'leader':''}" id="sr-${p.idx}">
-          <span class="score-rank">${rank===0&&m.rounds.length>0?'<i class="ph ph-crown"></i>':rank+1}</span>
-          <span class="score-name">${p.name}</span>
-          <span class="score-total" id="sv-${p.idx}">${p.score}</span>
-        </div>`).join('')}
+  // ── PODIUM SCOREBOARD ──
+  const podiumHTML = `
+    <div class="podium-section">
+      <div class="podium-header">
+        <span class="podium-label"><i class="ph ph-trophy"></i> Placar</span>
+        <span style="font-family:'JetBrains Mono';font-size:0.65rem;color:var(--text-3);">${m.scoring==='high'?'↑ Maior':'↓ Menor'}</span>
+      </div>
+      ${sorted.map((p, rank) => {
+        const barW = Math.max(6, (p.score / maxScore) * 100);
+        const part = m.participants.find(pt => pt.slot === p.idx);
+        const bgColor = (part && part.avatar) ? 'transparent' : AVATAR_COLORS[p.idx % AVATAR_COLORS.length];
+        const avContent = (part && part.avatar) ? avatarHTML(part.avatar) : `<span style="font-weight:700;font-size:0.72rem;color:#fff;">${p.name[0]}</span>`;
+        return `
+        <div class="podium-row ${rank===0&&m.rounds.length>0?'p-leader':''}" id="sr-${p.idx}">
+          <div class="podium-bar" style="width:${m.rounds.length>0?barW:0}%;"></div>
+          <div class="podium-rank">${rank===0&&m.rounds.length>0?'♛':rank+1}</div>
+          <div class="podium-avatar-wrap" style="background:${bgColor};">${avContent}</div>
+          <span class="podium-pname">${p.name}</span>
+          <span class="podium-pts" id="sv-${p.idx}">${p.score}</span>
+        </div>`;
+      }).join('')}
     </div>
   `;
 
-  let smartPanel = '';
+  // ── QUICK SCORE (formulas) ──
+  let smartHTML = '';
   if (m.formulas && m.formulas.length) {
-    let playerOpts = '';
+    let playerChips = '';
     if (isHost) {
-      playerOpts = m.players.map((p,pi) => `<option value="${pi}">${slotName(m, pi)}</option>`).join('');
+      if (typeof formulaSelectedPlayer === 'undefined' || formulaSelectedPlayer >= m.players.length) window.formulaSelectedPlayer = 0;
+      playerChips = m.players.map((p, pi) => {
+        const color = AVATAR_COLORS[pi % AVATAR_COLORS.length];
+        return `<button class="p-chip ${pi===formulaSelectedPlayer?'p-sel':''}" onclick="formulaSelectedPlayer=${pi};renderPlay();"><span class="p-dot" style="background:${color};"></span>${slotName(m, pi).split(' ')[0]}</button>`;
+      }).join('');
     } else {
       const myPart = m.participants.find(p => p.nickname === profile.nickname);
       if (myPart) {
-        playerOpts = `<option value="${myPart.slot}">${myPart.nickname}</option>`;
+        window.formulaSelectedPlayer = myPart.slot;
+        const color = AVATAR_COLORS[myPart.slot % AVATAR_COLORS.length];
+        playerChips = `<button class="p-chip p-sel"><span class="p-dot" style="background:${color};"></span>${myPart.nickname}</button>`;
       } else {
-        playerOpts = `<option value="0">${slotName(m, 0)}</option>`;
+        window.formulaSelectedPlayer = 0;
+        playerChips = `<button class="p-chip p-sel"><span class="p-dot" style="background:${AVATAR_COLORS[0]};"></span>${slotName(m, 0)}</button>`;
       }
     }
-    const chips = m.formulas.map((f,fi) =>
-      `<button class="formula-chip" onclick="applyFormula(${fi})">${f.label} <strong>${f.value>0?'+':''}${f.value}</strong></button>`
-    ).join('');
-    smartPanel = `
-      <div class="smart-apply-card">
-        <div class="smart-apply-header">
-          <div class="smart-apply-dot"></div>
-          <span class="smart-apply-title">Regras rápidas</span>
+    smartHTML = `
+      <div class="qscore-section">
+        <div class="qscore-header">
+          <div class="qscore-dot"></div>
+          <span class="qscore-label">Regras rápidas</span>
         </div>
-        <div style="margin-bottom:10px;">
-          <label class="form-label" style="margin-bottom:6px;">Jogador</label>
-          <select class="form-input" id="formula-player" style="padding:8px 12px;font-size:0.88rem;">${playerOpts}</select>
-        </div>
-        <div style="margin: -2px;">${chips}</div>
+        <div class="player-chips">${playerChips}</div>
+        <div class="formula-grid">${m.formulas.map((f, fi) =>
+          `<button class="f-btn ${f.value<0?'f-neg':''}" onclick="applyFormula(${fi})"><span class="f-lbl">${f.label}</span><span class="f-val">${f.value>0?'+':''}${f.value}</span></button>`
+        ).join('')}</div>
       </div>`;
   }
 
+  // ── LOG ──
   let logHTML = '';
   if (m.log && m.log.length) {
     logHTML = `
-      <div class="card" id="log-card">
-        <div class="card-title"><i class="ph ph-receipt"></i> Registro de pontuação</div>
-        ${m.log.map((entry, li) => ({entry, li})).reverse().map(({entry, li}) => `
-          <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.8rem;">
-            <span style="color:var(--text-2);"><strong style="color:var(--text);">${slotName(m, entry.player).split(' ')[0]}</strong> — ${entry.label}</span>
-            <span style="display:flex;align-items:center;gap:8px;">
-              <span style="font-family:'JetBrains Mono',monospace;color:${entry.value>=0?'var(--secondary)':'var(--accent)'};">${entry.value>0?'+':''}${entry.value}</span>
-              ${isHost ? `<button class="btn btn-ghost btn-sm" style="padding:2px 6px;" onclick="removeLogEntry(${li})" title="Desfazer"><i class="ph ph-x"></i></button>` : ''}
-            </span>
-          </div>`).join('')}
+      <div class="log-section-v2">
+        <div class="log-card-v2">
+          <div class="log-v2-title"><i class="ph ph-receipt"></i> Registro</div>
+          ${m.log.map((entry, li) => ({entry, li})).reverse().map(({entry, li}) => `
+            <div class="log-v2-entry">
+              <span class="log-v2-info"><strong>${slotName(m, entry.player).split(' ')[0]}</strong> — ${entry.label}</span>
+              <span class="log-v2-val ${entry.value>=0?'lv-pos':'lv-neg'}">
+                ${entry.value>0?'+':''}${entry.value}
+                ${isHost ? `<button class="btn btn-ghost btn-sm" style="padding:1px 5px;font-size:0.7rem;" onclick="removeLogEntry(${li})"><i class="ph ph-x"></i></button>` : ''}
+              </span>
+            </div>`).join('')}
+        </div>
       </div>`;
   }
 
-  // ROUND INPUT – com cores fixas por slot
-  const roundHTML = `
-    <div class="card">
-      <div class="round-header">
-        <span class="round-title">Nova rodada</span>
-        <span class="round-num">R${m.rounds.length+1}</span>
-      </div>
-      ${m.players.map((name, i) => {
-        const part = m.participants.find(p => p.slot === i);
-        // COR FIXA POR SLOT (a menos que tenha avatar)
-        const bgColor = (part && part.avatar) ? 'transparent' : AVATAR_COLORS[i % AVATAR_COLORS.length];
-        let avatarContent = (part && part.avatar)
-          ? avatarHTML(part.avatar)
-          : `<span style="font-weight:700;font-size:0.8rem;color:#fff;">${i+1}</span>`;
-        const isMySlot = part && part.nickname === profile.nickname;
-        const isDisabled = !isHost && !isMySlot;
-        // Nome exibido: nickname de quem ocupou o slot, ou nome do slot se vago
-        const displayName = part ? part.nickname : name;
-        return `
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-            <div style="display:flex;align-items:center;gap:6px;flex:1;">
-              <div style="width:26px;height:26px;border-radius:50%;background:${bgColor};border:1.5px solid var(--text);overflow:hidden;flex-shrink:0;display:grid;place-items:center;">
-                ${avatarContent}
-              </div>
-              <span class="round-row-name" style="font-weight:600;">${displayName}</span>
-              ${!part ? `<span style="font-size:0.6rem;color:var(--text-3);">(vago)</span>` : ''}
-              ${part && part.isHost ? `<span style="font-size:0.6rem;color:var(--primary);">👑</span>` : ''}
-              ${isHost && part && !part.isHost ? `<button onclick="kickParticipant('${part.nickname}')" style="margin-left:2px;background:none;border:none;cursor:pointer;color:var(--accent);font-size:0.9rem;padding:1px 3px;border-radius:4px;display:inline-flex;align-items:center;opacity:0.6;" title="Expulsar ${part.nickname}"><i class="ph ph-x-circle"></i></button>` : ''}
-            </div>
-            <input type="number" id="ri-${i}" value="0" inputmode="numeric" onfocus="this.select()" ${isDisabled ? 'disabled' : ''} style="width:70px;text-align:center;padding:6px;border-radius:8px;border:1.5px solid var(--border);background:${isDisabled ? 'var(--surface-3)' : 'var(--surface-2)'};">
-          </div>
-          <div style="padding-left:38px;margin-top:-4px;margin-bottom:10px;">
-            ${isDisabled ? '' : `<input type="text" class="form-input" id="rn-${i}" placeholder="Anotação..." style="font-size:0.75rem;padding:7px 10px;border-radius:8px;">`}
-          </div>
-        `;
-      }).join('')}
-      ${isHost ? `<button class="btn btn-primary btn-block btn-round mt-12" onclick="confirmRound()"><i class="ph ph-check"></i> Confirmar Rodada</button>` : `<div style="font-size:0.72rem;color:var(--text-3);text-align:center;margin-top:10px;padding:8px;background:var(--surface-2);border-radius:8px;">Aguardando o anfitrião confirmar a rodada</div>`}
-    </div>
-  `;
-
-  let historyRoundsHTML = '';
+  // ── ROUNDS COLLAPSIBLE ──
+  let roundsHTML = '';
   if (m.rounds.length > 0) {
-    historyRoundsHTML = `
-      <div class="card">
-        <div class="card-title"><i class="ph ph-list-bullets"></i> Histórico de rodadas</div>
-        ${m.rounds.map((r,ri) => `
-          <div class="history-round" style="flex-direction:column;align-items:stretch;gap:4px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;">
-              <span class="history-round-label">R${ri+1}</span>
-              <div class="history-round-scores">${r.scores.map((s,pi) =>
-                `<span class="h-score ${s>0?'pos':s<0?'neg':'zero'}">${slotName(m, pi).split(' ')[0]}: ${s>0?'+':''}${s}</span>`
-              ).join('')}</div>
-            </div>
-            ${r.notes && r.notes.some(n=>n) ? `<div style="padding-left:30px;font-size:0.68rem;color:var(--text-3);line-height:1.5;">${r.notes.map((n,pi) => n ? `<div><span style="color:var(--text-2);font-weight:600;">${slotName(m, pi).split(' ')[0]}:</span> ${n}</div>` : '').join('')}</div>` : ''}
-          </div>`).join('')}
+    roundsHTML = `
+      <div class="rounds-v2">
+        <button class="rounds-toggle" onclick="this.classList.toggle('r-open');this.nextElementSibling.classList.toggle('r-show');">
+          <span><i class="ph ph-list-bullets"></i> Rodadas anteriores (${m.rounds.length})</span>
+          <i class="ph ph-caret-down"></i>
+        </button>
+        <div class="rounds-body">
+          ${m.rounds.map((r,ri) => `
+            <div class="history-round" style="flex-direction:column;align-items:stretch;gap:3px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span class="history-round-label">R${ri+1}</span>
+                <div class="history-round-scores">${r.scores.map((s,pi) =>
+                  `<span class="h-score ${s>0?'pos':s<0?'neg':'zero'}">${slotName(m, pi).split(' ')[0]}: ${s>0?'+':''}${s}</span>`
+                ).join('')}</div>
+              </div>
+              ${r.notes && r.notes.some(n=>n) ? `<div style="padding-left:28px;font-size:0.66rem;color:var(--text-3);line-height:1.4;">${r.notes.map((n,pi) => n ? `<div><span style="color:var(--text-2);font-weight:600;">${slotName(m, pi).split(' ')[0]}:</span> ${n}</div>` : '').join('')}</div>` : ''}
+            </div>`).join('')}
+        </div>
       </div>`;
   }
 
-  const actionBar = `
-    <div class="action-bar">
-      ${m.rules||m.formulas?.length ? `<button class="btn btn-ghost btn-sm btn-round" onclick="showRules()"><i class="ph ph-scroll"></i> Regras</button>` : ''}
-      <button class="btn btn-ghost btn-sm btn-round" onclick="openRoomModal()"><i class="ph ph-users-three"></i> ${m.roomCode ? 'Sala '+m.roomCode : 'Compartilhar'}</button>
-      ${isHost ? `<button class="btn btn-danger btn-sm btn-round" style="margin-left:auto;" onclick="endMatch()"><i class="ph ph-stop"></i> Encerrar</button>` : ''}
+  // ── ACTION BAR ──
+  const actionHTML = `
+    <div class="game-actions-v2">
+      ${m.rules||m.formulas?.length ? `<button class="ga-btn" onclick="showRules()"><i class="ph ph-scroll"></i> Regras</button>` : ''}
+      <button class="ga-btn" onclick="openRoomModal()"><i class="ph ph-users-three"></i> ${m.roomCode ? 'Sala '+m.roomCode : 'Compartilhar'}</button>
+      <button class="ga-btn" onclick="openMusicModal()"><i class="ph ph-music-notes"></i> Música</button>
+      ${isHost ? `<button class="ga-btn ga-danger" style="margin-left:auto;" onclick="endMatch()"><i class="ph ph-stop"></i> Encerrar</button>` : ''}
     </div>
   `;
 
-  el.innerHTML = heroHTML + timerHTML + scoreHTML + smartPanel + logHTML + roundHTML + historyRoundsHTML + actionBar;
+  // For non-host: inline round input (they may fill their own score)
+  let guestRoundHTML = '';
+  if (!isHost) {
+    const myPart = m.participants.find(p => p.nickname === profile.nickname);
+    guestRoundHTML = `
+      <div class="card" style="margin:0 16px 12px;">
+        <div class="round-header">
+          <span class="round-title">Sua pontuação</span>
+          <span class="round-num">R${m.rounds.length+1}</span>
+        </div>
+        ${myPart ? `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <span class="round-row-name" style="font-weight:600;">${myPart.nickname}</span>
+            <input type="number" id="ri-${myPart.slot}" value="0" inputmode="numeric" onfocus="this.select()" style="width:70px;text-align:center;padding:6px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface-2);">
+          </div>
+          <input type="text" class="form-input" id="rn-${myPart.slot}" placeholder="Anotação..." style="font-size:0.75rem;padding:7px 10px;border-radius:8px;">
+        ` : `<div style="font-size:0.72rem;color:var(--text-3);text-align:center;padding:8px;background:var(--surface-2);border-radius:8px;">Aguardando o anfitrião confirmar a rodada</div>`}
+      </div>
+    `;
+  }
+
+  el.innerHTML = heroHTML + timerHTML + podiumHTML + smartHTML + logHTML + guestRoundHTML + roundsHTML + actionHTML;
+  updateTimerDisplay();
 }
+
+// ── Formula player selector (global) ──
+window.formulaSelectedPlayer = 0;
 
 function applyFormula(fi) {
   const m = state.currentMatch;
   if (!m) return;
   const f = m.formulas[fi];
-  const playerIdx = parseInt(document.getElementById('formula-player')?.value ?? 0);
+  const playerIdx = window.formulaSelectedPlayer ?? 0;
   const isHost = m.isHost;
   if (!isHost) {
     const myPart = m.participants.find(p => p.nickname === profile.nickname);
@@ -826,11 +883,13 @@ function removeLogEntry(li) {
 function confirmRound() {
   const m = state.currentMatch;
   if (!m) return;
-  const scores = m.players.map((_,i) => parseInt(document.getElementById(`ri-${i}`)?.value)||0);
-  const notes = m.players.map((_,i) => document.getElementById(`rn-${i}`)?.value?.trim()||'');
+  // Read from bottom sheet (si-*) if open, fallback to inline (ri-*)
+  const scores = m.players.map((_,i) => parseInt((document.getElementById(`si-${i}`) || document.getElementById(`ri-${i}`))?.value)||0);
+  const notes = m.players.map((_,i) => (document.getElementById(`sn-${i}`) || document.getElementById(`rn-${i}`))?.value?.trim()||'');
   m.rounds.push({ scores, notes });
   scores.forEach((s,i) => m.scores[i] += s);
   SFX.score();
+  closeRoundSheet();
   setTimeout(() => { renderPlay(); toast(`Rodada ${m.rounds.length} confirmada`); broadcastState(); save(); }, 380);
 }
 
@@ -1693,6 +1752,74 @@ function clearAllData() {
   SFX.remove(); toast('Dados limpos');
 }
 
+// ── ROUND BOTTOM SHEET ──
+function openRoundSheet() {
+  const m = state.currentMatch;
+  if (!m) return;
+  SFX.tap();
+  const container = document.getElementById('rs-players');
+  container.innerHTML = m.players.map((name, i) => {
+    const part = m.participants.find(p => p.slot === i);
+    const bgColor = (part && part.avatar) ? 'transparent' : AVATAR_COLORS[i % AVATAR_COLORS.length];
+    const avContent = (part && part.avatar) ? avatarHTML(part.avatar) : `<span style="font-weight:700;font-size:0.72rem;color:#fff;">${(part ? part.nickname : name)[0]}</span>`;
+    const displayName = part ? part.nickname : name;
+    return `
+      <div class="rs-player-row">
+        <div class="rs-player-avatar" style="background:${bgColor};">${avContent}</div>
+        <div class="rs-player-info">
+          <div class="rs-player-name">${displayName}</div>
+          <div class="rs-player-cur">atual: ${m.scores[i]} pts</div>
+        </div>
+        <div class="rs-stepper">
+          <button class="rs-step-btn" onclick="stepSheetScore(${i},-1)">−</button>
+          <input type="number" class="rs-step-val" id="si-${i}" value="0" inputmode="numeric" onfocus="this.select()">
+          <button class="rs-step-btn" onclick="stepSheetScore(${i},1)">＋</button>
+        </div>
+      </div>
+      <input type="text" class="rs-note" placeholder="Anotação..." id="sn-${i}">`;
+  }).join('');
+  document.getElementById('rs-overlay').classList.add('rs-open');
+  document.getElementById('rs-panel').classList.add('rs-open');
+}
+
+function closeRoundSheet() {
+  document.getElementById('rs-overlay').classList.remove('rs-open');
+  document.getElementById('rs-panel').classList.remove('rs-open');
+}
+
+function stepSheetScore(i, delta) {
+  const input = document.getElementById(`si-${i}`);
+  if (input) input.value = parseInt(input.value || 0) + delta;
+}
+
+// ── TIMER V2 HELPERS ──
+function toggleTimerV2() {
+  if (timerInterval) {
+    pauseTimer();
+  } else {
+    startTimer();
+  }
+  const icon = document.getElementById('t-play-icon');
+  if (icon) icon.className = timerInterval ? 'ph ph-pause' : 'ph ph-play';
+}
+
+function setTimerModeV2(mode) {
+  if (mode === 'infinite') { timerLimit = 0; }
+  else if (mode === '5') { timerLimit = 300; }
+  else if (mode === '10') { timerLimit = 600; }
+  else if (mode === 'custom') {
+    const v = prompt('Tempo limite em minutos (0 = sem limite):');
+    if (v === null) return;
+    const mins = parseInt(v);
+    if (isNaN(mins) || mins < 0) return;
+    timerLimit = mins * 60;
+  }
+  timerSeconds = 0;
+  updateTimerDisplay();
+  renderPlay();
+  toast(timerLimit > 0 ? `Limite: ${Math.floor(timerLimit/60)} min` : 'Modo livre');
+}
+
 // TIMER
 let timerInterval = null;
 let timerSeconds = 0;
@@ -1732,13 +1859,32 @@ function updateTimerDisplay() {
   el.textContent = h > 0
     ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
     : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  if (timerLimit > 0) {
-    const remaining = timerLimit - timerSeconds;
-    const el2 = document.getElementById('timer-remaining');
-    if (el2 && remaining > 0) {
-      const rm = Math.floor(remaining / 60);
-      const rs = remaining % 60;
-      el2.textContent = `resta ${rm}:${String(rs).padStart(2,'0')}`;
+
+  // Update ring SVG
+  const ring = document.getElementById('timer-ring-fill');
+  const circumference = 2 * Math.PI * 80; // r=80
+  const labelEl = document.getElementById('timer-remaining');
+
+  if (ring) {
+    if (timerLimit > 0) {
+      const pct = Math.min(timerSeconds / timerLimit, 1);
+      ring.style.strokeDasharray = circumference;
+      ring.style.strokeDashoffset = circumference * (1 - pct);
+      ring.classList.remove('t-infinite');
+      ring.classList.toggle('t-warning', pct > 0.8);
+      if (labelEl) {
+        const remaining = Math.max(0, timerLimit - timerSeconds);
+        const rm = Math.floor(remaining / 60);
+        const rs = remaining % 60;
+        labelEl.textContent = remaining <= 0 ? 'tempo esgotado!' : `resta ${rm}:${String(rs).padStart(2,'0')}`;
+      }
+    } else {
+      const cycle = (timerSeconds % 60) / 60;
+      ring.style.strokeDasharray = circumference;
+      ring.style.strokeDashoffset = circumference * (1 - cycle);
+      ring.classList.add('t-infinite');
+      ring.classList.remove('t-warning');
+      if (labelEl) labelEl.textContent = timerInterval ? 'em andamento' : 'pausado';
     }
   }
 }
