@@ -419,17 +419,19 @@ function openSetup(gid) {
   if (gid) {
     const g = state.games.find(x => x.id === gid);
     if (g) {
+      // wallpaper corrompido (salvo como string literal) = tratar como vazio
+      const savedWallpaper = (g.wallpaper && g.wallpaper !== '(arquivo local)') ? g.wallpaper : '';
       setup = {
         emoji: g.emoji, type: g.type, scoring: g.scoring,
         playerCount: g.players.length,
         font: g.font || 'playfair',
-        wallpaper: g.wallpaper || '',
+        wallpaper: savedWallpaper,
         wpPosX: g.wpPosX ?? 50, wpPosY: g.wpPosY ?? 50, wpZoom: g.wpZoom ?? 100,
         formulas: JSON.parse(JSON.stringify(g.formulas || []))
       };
       document.getElementById('setup-name').value = g.name;
       document.getElementById('setup-rules').value = g.rules || '';
-      document.getElementById('setup-wallpaper').value = g.wallpaper && !g.wallpaper.startsWith('data:') ? g.wallpaper : (g.wallpaper ? '(arquivo local)' : '');
+      document.getElementById('setup-wallpaper').value = savedWallpaper && !savedWallpaper.startsWith('data:') ? savedWallpaper : (savedWallpaper ? '(arquivo local)' : '');
     }
     document.getElementById('setup-modal-title').textContent = 'Editar Jogo';
   } else {
@@ -542,7 +544,7 @@ function startMatch(gid) {
     scoring: g.scoring, players: [...g.players], rules: g.rules,
     formulas: JSON.parse(JSON.stringify(g.formulas||[])),
     font: g.font || 'playfair',
-    wallpaper: g.wallpaper || '',
+    wallpaper: (g.wallpaper && g.wallpaper !== '(arquivo local)') ? g.wallpaper : '',
     wpPosX: g.wpPosX ?? 50, wpPosY: g.wpPosY ?? 50, wpZoom: g.wpZoom ?? 100,
     rounds: [], scores: g.players.map(() => 0),
     log: [],
