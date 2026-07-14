@@ -1365,68 +1365,92 @@ function removeLogEntry(li) {
 function endMatch() {
   const m = state.currentMatch;
   if (!m) return;
-  if (!m.isHost) { toast('Apenas o anfitrião pode encerrar a partida'); return; }
-  const hasActivity = m.rounds.length > 0 || (m.log && m.log.length > 0);
-  if (!hasActivity && !confirm('Nenhuma rodada registrada. Encerrar assim mesmo?')) return;
-  const sorted = getSorted(m);
-  
-  // 🔥 SALVA OS PARTICIPANTES COM AVATAR
-  const participantsData = m.participants.map(p => ({
-    nickname: p.nickname || m.players[p.slot] || `Jogador ${p.slot+1}`,
-    avatar: p.avatar || '',
-    slot: p.slot
-  }));
 
-  const match = {
-    id: genId(), gameId: m.gameId, gameName: m.gameName, emoji: m.emoji,
-    type: m.type, scoring: m.scoring, players: [...m.players],
-    rounds: [...m.rounds], finalScores: [...m.scores], winner: sorted[0],
-    startedAt: m.startedAt, endedAt: new Date().toISOString(),
-    rules: m.rules, formulas: m.formulas||[], log: m.log||[],
-    font: m.font, wallpaper: m.wallpaper,
-    wpPosX: m.wpPosX ?? 50, wpPosY: m.wpPosY ?? 50, wpZoom: m.wpZoom ?? 100,
-    teamModes: m.teamModes, currentMode: m.currentMode,
-    participants: participantsData // 🔥 NOVO
-  };
-  state.matches.unshift(match);
-  const wasInRoom = !!m.roomCode;
-  if (wasInRoom) { m.ended = true; broadcastState(); }
-  if (roomChannel) { sb?.removeChannel(roomChannel); roomChannel = null; }
-  state.currentMatch = null;
-  save();
-  cloudUpsertMatch(match);
-  if (hasActivity) { SFX.win(); spawnConfetti(); showWinner(match); }
-  else { navTo('history'); renderPlay(); renderHistory(); }
+  if (!m.isHost) { 
+    toast('Apenas o anfitrião pode encerrar a partida'); 
+    return; 
+  }
+
+  const hasActivity = m.rounds.length > 0 || (m.log && m.log.length > 0);
+
+  if (!hasActivity) {
+    openConfirmModal(
+      'Encerrar Partida',
+      'Nenhuma rodada registrada. Encerrar mesmo assim?',
+      () => finishMatch(m)
+    );
+    return;
+  }
+
+  finishMatch(m);
 }
 
+
 function finishMatch(m) {
-  // O código que estava dentro de endMatch() após as verificações
+  const hasActivity = m.rounds.length > 0 || (m.log && m.log.length > 0);
+
   const sorted = getSorted(m);
+
   const participantsData = m.participants.map(p => ({
     nickname: p.nickname || m.players[p.slot] || `Jogador ${p.slot+1}`,
     avatar: p.avatar || '',
     slot: p.slot
   }));
+
   const match = {
-    id: genId(), gameId: m.gameId, gameName: m.gameName, emoji: m.emoji,
-    type: m.type, scoring: m.scoring, players: [...m.players],
-    rounds: [...m.rounds], finalScores: [...m.scores], winner: sorted[0],
-    startedAt: m.startedAt, endedAt: new Date().toISOString(),
-    rules: m.rules, formulas: m.formulas||[], log: m.log||[],
-    font: m.font, wallpaper: m.wallpaper,
-    wpPosX: m.wpPosX ?? 50, wpPosY: m.wpPosY ?? 50, wpZoom: m.wpZoom ?? 100,
-    teamModes: m.teamModes, currentMode: m.currentMode,
+    id: genId(),
+    gameId: m.gameId,
+    gameName: m.gameName,
+    emoji: m.emoji,
+    type: m.type,
+    scoring: m.scoring,
+    players: [...m.players],
+    rounds: [...m.rounds],
+    finalScores: [...m.scores],
+    winner: sorted[0],
+    startedAt: m.startedAt,
+    endedAt: new Date().toISOString(),
+    rules: m.rules,
+    formulas: m.formulas || [],
+    log: m.log || [],
+    font: m.font,
+    wallpaper: m.wallpaper,
+    wpPosX: m.wpPosX ?? 50,
+    wpPosY: m.wpPosY ?? 50,
+    wpZoom: m.wpZoom ?? 100,
+    teamModes: m.teamModes,
+    currentMode: m.currentMode,
     participants: participantsData
   };
+
   state.matches.unshift(match);
+
   const wasInRoom = !!m.roomCode;
-  if (wasInRoom) { m.ended = true; broadcastState(); }
-  if (roomChannel) { sb?.removeChannel(roomChannel); roomChannel = null; }
+
+  if (wasInRoom) {
+    m.ended = true;
+    broadcastState();
+  }
+
+  if (roomChannel) {
+    sb?.removeChannel(roomChannel);
+    roomChannel = null;
+  }
+
   state.currentMatch = null;
+
   save();
   cloudUpsertMatch(match);
-  if (hasActivity) { SFX.win(); spawnConfetti(); showWinner(match); }
-  else { navTo('history'); renderPlay(); renderHistory(); }
+
+  if (hasActivity) {
+    SFX.win();
+    spawnConfetti();
+    showWinner(match);
+  } else {
+    navTo('history');
+    renderPlay();
+    renderHistory();
+  }
 }
 
 function showWinner(match) {
