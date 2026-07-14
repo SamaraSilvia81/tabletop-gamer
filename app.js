@@ -738,6 +738,7 @@ function renderPlay() {
               <span class="round-row-name" style="font-weight:600;">${displayName}</span>
               ${!part ? `<span style="font-size:0.6rem;color:var(--text-3);">(vago)</span>` : ''}
               ${part && part.isHost ? `<span style="font-size:0.6rem;color:var(--primary);">👑</span>` : ''}
+              ${isHost && part && !part.isHost ? `<button onclick="kickParticipant('${part.nickname}')" style="margin-left:2px;background:none;border:none;cursor:pointer;color:var(--accent);font-size:0.9rem;padding:1px 3px;border-radius:4px;display:inline-flex;align-items:center;opacity:0.6;" title="Expulsar ${part.nickname}"><i class="ph ph-x-circle"></i></button>` : ''}
             </div>
             <input type="number" id="ri-${i}" value="0" inputmode="numeric" onfocus="this.select()" ${isDisabled ? 'disabled' : ''} style="width:70px;text-align:center;padding:6px;border-radius:8px;border:1.5px solid var(--border);background:${isDisabled ? 'var(--surface-3)' : 'var(--surface-2)'};">
           </div>
