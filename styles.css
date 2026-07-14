@@ -2259,7 +2259,77 @@ body::after {
 }
 
 /* ══════════════════════════════════════════════════
-   TEAM SETUP SHEET
+   HISTORY PODIUM CARD
+   ══════════════════════════════════════════════════ */
+
+.match-hero-wrap {
+  position: relative;
+  border-radius: 10px 10px 0 0;
+  background: var(--surface-2);
+  padding: 12px 14px 10px;
+  border-bottom: 1.5px solid var(--border);
+  overflow: hidden;
+}
+
+.match-hero-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hist-podium-list {
+  padding: 10px 14px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hist-podium-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  transition: all 0.15s;
+}
+
+.hist-podium-row.hist-leader {
+  background: var(--leader-bg);
+  border-color: var(--text);
+  box-shadow: 2px 2px 0 rgba(30,21,12,0.7);
+}
+
+.hist-rank {
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hist-pname {
+  flex: 1;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hist-pts {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary-dim);
+  min-width: 36px;
+  text-align: right;
+}
+
+.hist-leader .hist-pts { font-size: 1.25rem; }
    ══════════════════════════════════════════════════ */
 
 .team-slot-block {

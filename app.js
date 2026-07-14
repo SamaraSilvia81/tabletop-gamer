@@ -257,40 +257,36 @@ function spawnConfetti() {
 //  FUNÇÕES DE SETUP (CRIAÇÃO/EDIÇÃO) COM MÚLTIPLOS MODOS
 // ============================================================
 function toggleTeamMode(el, event) {
-  // Evita double-fire do label→checkbox→label
   if (event) event.preventDefault();
-  const cb = el.querySelector('input[type="checkbox"]');
-  if (!cb) return;
-  // Inverte manualmente
-  const newState = !cb.checked;
-  cb.checked = newState;
+  // Estado real é a classe .selected — nunca o checkbox (display:none)
+  const isCurrentlySelected = el.classList.contains('selected');
+  const newState = !isCurrentlySelected;
+
+  // Impede desmarcar se só existe um selecionado
+  const selectedCount = document.querySelectorAll('#team-mode-grid .type-option.selected').length;
+  if (!newState && selectedCount <= 1) return; // mínimo 1 sempre
+
   el.classList.toggle('selected', newState);
-  // Atualiza o array teamModes no setup
-  const checkedModes = Array.from(document.querySelectorAll('#team-mode-grid .type-option'))
-    .filter(opt => opt.querySelector('input[type="checkbox"]').checked)
-    .map(opt => opt.dataset.mode);
+  const cb = el.querySelector('input[type="checkbox"]');
+  if (cb) cb.checked = newState;
+
+  // Reconstrói setup.teamModes a partir das classes .selected
+  const checkedModes = Array.from(document.querySelectorAll('#team-mode-grid .type-option.selected'))
+    .map(opt => opt.dataset.mode)
+    .filter(Boolean);
   setup.teamModes = checkedModes.length ? checkedModes : ['individual'];
-  // Se não houver nenhum marcado, força individual
-  if (checkedModes.length === 0) {
-    const first = document.querySelector('#team-mode-grid .type-option');
-    if (first) {
-      const cb2 = first.querySelector('input[type="checkbox"]');
-      if (cb2) { cb2.checked = true; first.classList.add('selected'); }
-      setup.teamModes = ['individual'];
-    }
-  }
   SFX.tap();
 }
+
 function initTeamModes() {
   const grid = document.getElementById('team-mode-grid');
   if (!grid) return;
   const modes = setup.teamModes || ['individual'];
   grid.querySelectorAll('.type-option').forEach(opt => {
-    const cb = opt.querySelector('input[type="checkbox"]');
-    if (!cb) return;
     const isChecked = modes.includes(opt.dataset.mode);
-    cb.checked = isChecked;
     opt.classList.toggle('selected', isChecked);
+    const cb = opt.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = isChecked;
   });
 }
 
@@ -1548,24 +1544,62 @@ function renderHistory() {
     const dt = new Date(m.endedAt).toLocaleDateString('pt-BR', {
       day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'
     });
-    const sorted = m.players.map((n,i) => ({ name:n, score:m.finalScores[i] }));
+    // Usa participants com nickname e avatar, fallback para players array
+    const sorted = m.players.map((name, i) => {
+      const part = m.participants ? m.participants.find(p => p.slot === i) : null;
+      return {
+        name: part ? part.nickname : name,
+        score: m.finalScores[i] ?? 0,
+        avatar: part ? part.avatar : '',
+        idx: i
+      };
+    });
     sorted.sort((a,b) => m.scoring==='high' ? b.score-a.score : a.score-b.score);
     const fontCSS = getFontCSS(m.font||'playfair');
+    const wallpaperStyle = m.wallpaper
+      ? `background-image:url('${m.wallpaper}');background-position:${m.wpPosX??50}% ${m.wpPosY??50}%;background-size:${(m.wpZoom??100)===100?'cover':(m.wpZoom??100)+'%'};background-repeat:no-repeat;`
+      : '';
+
+    // Pódio top-3 compacto
+    const podiumRows = sorted.slice(0, 3).map((p, rank) => {
+      const avatarContent = p.avatar ? avatarHTML(p.avatar) : `<span style="font-weight:800;font-size:0.65rem;color:#fff;">${(p.name||'?')[0].toUpperCase()}</span>`;
+      const bgColor = p.avatar ? 'transparent' : AVATAR_COLORS[p.idx % AVATAR_COLORS.length];
+      const rankLabel = rank === 0 ? '<i class="ph ph-crown" style="font-size:0.75rem;color:var(--primary-dim);"></i>' : `<span style="font-size:0.62rem;color:var(--text-3);">${rank+1}</span>`;
+      return `
+        <div class="hist-podium-row ${rank===0?'hist-leader':''}">
+          <div class="hist-rank">${rankLabel}</div>
+          <div class="podium-avatar-wrap" style="background:${bgColor};width:26px;height:26px;border:1.5px solid var(--text);border-radius:50%;display:grid;place-items:center;overflow:hidden;flex-shrink:0;">${avatarContent}</div>
+          <span class="hist-pname">${p.name}</span>
+          <span class="hist-pts">${p.score}</span>
+        </div>`;
+    }).join('');
+
     return `
       <div class="match-card" onclick="showDetail('${m.id}')">
-        <div class="match-top">
-          <div class="match-icon">${getIconSVG(m.emoji, 22)}</div>
-          <div class="match-info">
-            <div class="match-name" style="font-family:${fontCSS}">${m.gameName}</div>
-            <div class="match-date">${dt} · ${m.rounds.length} rodadas</div>
+        <div class="match-hero-wrap" ${wallpaperStyle ? `style="${wallpaperStyle}"` : ''}>
+          ${m.wallpaper ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,0.4);border-radius:10px 10px 0 0;"></div>` : ''}
+          <div class="match-hero-inner" style="${m.wallpaper?'position:relative;z-index:1;':''}">
+            <div class="match-icon" style="${m.wallpaper?'background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.3);':''}">
+              ${getIconSVG(m.emoji, 20)}
+            </div>
+            <div class="match-info">
+              <div class="match-name" style="font-family:${fontCSS};${m.wallpaper?'color:#fff;':''}">
+                ${m.gameName}
+              </div>
+              <div class="match-date" style="${m.wallpaper?'color:rgba(255,255,255,0.65);':''}">
+                ${dt} · ${m.rounds.length} rodada${m.rounds.length!==1?'s':''}
+              </div>
+            </div>
           </div>
         </div>
-        <div class="match-podium">${sorted.map((p,i) =>
-          `<span class="podium-chip">${i===0?'<i class="ph ph-crown"></i> ':''}${p.name.split(' ')[0]} <span class="p-score">${p.score}</span></span>`
-        ).join('')}</div>
+        <div class="hist-podium-list">${podiumRows}</div>
         <div class="match-footer">
-          <button class="btn btn-ghost btn-sm btn-round" style="flex:1;" onclick="event.stopPropagation();replay('${m.id}')"><i class="ph ph-arrow-counter-clockwise"></i> Jogar de novo</button>
-          <button class="btn btn-danger btn-sm btn-round" style="flex-shrink:0;" onclick="event.stopPropagation();delMatch('${m.id}')"><i class="ph ph-trash"></i> Excluir</button>
+          <button class="btn btn-ghost btn-sm btn-round" style="flex:1;" onclick="event.stopPropagation();replay('${m.id}')">
+            <i class="ph ph-arrow-counter-clockwise"></i> Jogar de novo
+          </button>
+          <button class="btn btn-danger btn-sm btn-round" style="flex-shrink:0;" onclick="event.stopPropagation();delMatch('${m.id}')">
+            <i class="ph ph-trash"></i>
+          </button>
         </div>
       </div>`;
   }).join('');
@@ -1575,23 +1609,54 @@ function showDetail(id) {
   const m = state.matches.find(x => x.id === id);
   if (!m) return;
   SFX.tap();
-  const sorted = m.players.map((n,i) => ({ name:n, score:m.finalScores[i] }));
+
+  // Monta sorted com avatares e nicknames dos participantes
+  const sorted = m.players.map((name, i) => {
+    const part = m.participants ? m.participants.find(p => p.slot === i) : null;
+    return {
+      name: part ? part.nickname : name,
+      score: m.finalScores[i] ?? 0,
+      avatar: part ? part.avatar : '',
+      idx: i
+    };
+  });
   sorted.sort((a,b) => m.scoring==='high' ? b.score-a.score : a.score-b.score);
+
   const fontCSS = getFontCSS(m.font||'playfair');
+  const wallpaperStyle = m.wallpaper
+    ? `background-image:url('${m.wallpaper}');background-position:${m.wpPosX??50}% ${m.wpPosY??50}%;background-size:${(m.wpZoom??100)===100?'cover':(m.wpZoom??100)+'%'};background-repeat:no-repeat;`
+    : '';
+
+  const podiumHTML = sorted.map((p, i) => {
+    const avatarContent = p.avatar
+      ? avatarHTML(p.avatar)
+      : `<span style="font-weight:800;font-size:0.65rem;color:#fff;">${(p.name||'?')[0].toUpperCase()}</span>`;
+    const bgColor = p.avatar ? 'transparent' : AVATAR_COLORS[p.idx % AVATAR_COLORS.length];
+    return `
+      <div class="score-row ${i===0?'leader':''}" style="margin-bottom:5px;">
+        <span class="score-rank">${i===0?'<i class="ph ph-crown"></i>':i+1}</span>
+        <div class="podium-avatar-wrap" style="background:${bgColor};border-color:var(--text);width:30px;height:30px;border-radius:50%;display:grid;place-items:center;overflow:hidden;border:1.5px solid var(--text);flex-shrink:0;">
+          ${avatarContent}
+        </div>
+        <span class="score-name" style="margin-left:8px;">${p.name}</span>
+        <span class="score-total">${p.score}</span>
+      </div>`;
+  }).join('');
+
   document.getElementById('detail-content').innerHTML = `
-    <div style="text-align:center;margin-bottom:20px;">
-      <div style="font-size:2.5rem;margin-bottom:6px;">${getIconSVG(m.emoji, 42)}</div>
-      <div style="font-family:${fontCSS};font-size:1.35rem;font-weight:800;color:var(--text);">${m.gameName}</div>
-      <div style="font-size:0.7rem;color:var(--text-3);margin-top:4px;">${new Date(m.endedAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})} · ${m.rounds.length} rodadas</div>
+    <div class="winner-screen" style="${wallpaperStyle}">
+      ${m.wallpaper ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);z-index:0;border-radius:inherit;"></div>` : ''}
+      <div style="position:relative;z-index:1;">
+        <div style="font-size:2.5rem;margin-bottom:6px;">${getIconSVG(m.emoji, 42)}</div>
+        <div class="winner-name" style="font-family:${fontCSS};${m.wallpaper?'color:#fff;':''}">${m.gameName}</div>
+        <div class="winner-pts" style="${m.wallpaper?'color:rgba(255,255,255,0.7);':''}">
+          ${new Date(m.endedAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})} · ${m.rounds.length} rodada${m.rounds.length!==1?'s':''}
+        </div>
+      </div>
     </div>
     <div class="card">
-      <div class="card-title"><i class="ph ph-trophy"></i> Classificação</div>
-      ${sorted.map((p,i) => `
-        <div class="score-row ${i===0?'leader':''}" style="margin-bottom:5px;">
-          <span class="score-rank">${i===0?'<i class="ph ph-crown"></i>':i+1}</span>
-          <span class="score-name">${p.name}</span>
-          <span class="score-total">${p.score}</span>
-        </div>`).join('')}
+      <div class="card-title"><i class="ph ph-trophy"></i> Classificação Final</div>
+      ${podiumHTML}
     </div>
     ${m.rounds.length>0 ? `
       <div class="card">
@@ -1622,7 +1687,7 @@ function showDetail(id) {
       </div>` : ''}
     ${m.formulas&&m.formulas.length ? `
       <div class="card">
-        <div class="card-title"><i class="ph ph-lightning"></i> Regras cadastradas neste jogo</div>
+        <div class="card-title"><i class="ph ph-lightning"></i> Regras desta partida</div>
         ${m.formulas.map(f => `
           <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
             <span style="color:var(--text-2);">${f.label}</span>
@@ -1634,7 +1699,8 @@ function showDetail(id) {
         <div class="card-title"><i class="ph ph-scroll"></i> Regras</div>
         <div class="rules-box">${m.rules}</div>
       </div>` : ''}
-    <button class="btn btn-danger btn-block btn-round mt-12" onclick="if(delMatch('${m.id}'))closeDetail();"><i class="ph ph-trash"></i> Excluir partida</button>`;
+    <button class="btn btn-danger btn-block btn-round mt-12" onclick="delMatch('${m.id}');closeDetail();"><i class="ph ph-trash"></i> Excluir partida</button>`;
+
   document.getElementById('detail-modal').classList.add('active');
 }
 
