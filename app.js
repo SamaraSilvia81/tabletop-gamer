@@ -681,6 +681,100 @@ function startMatch(gid) {
   save();
 }
 
+function openTeamSetupModal() {
+  const m = state.currentMatch;
+  if (!m || !m.isHost) {
+    toast('Apenas o anfitrião pode organizar os times');
+    return;
+  }
+  // Cria um modal rápido (pode ser um overlay simples)
+  const overlay = document.createElement('div');
+  overlay.id = 'team-setup-overlay';
+  overlay.style.cssText = `
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    z-index: 300; display: flex; align-items: center; justify-content: center;
+  `;
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  const panel = document.createElement('div');
+  panel.style.cssText = `
+    background: var(--surface); border-radius: 16px; padding: 20px; max-width: 400px; width: 90%;
+    max-height: 80vh; overflow-y: auto; border: 2px solid var(--text);
+    box-shadow: var(--card-shadow);
+  `;
+
+  // Título
+  const title = document.createElement('h3');
+  title.textContent = `Organizar ${m.currentMode === 'duplas' ? 'Duplas' : 'Times'}`;
+  title.style.cssText = `font-family: 'Fredoka', sans-serif; margin-bottom: 16px; text-align: center;`;
+
+  // Lista de participantes
+  const list = document.createElement('div');
+  list.style.cssText = 'display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;';
+
+  m.participants.forEach((p, idx) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface-2); border-radius: 8px; border: 1px solid var(--border);';
+
+    // Avatar/nome
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = p.nickname || `Jogador ${p.slot+1}`;
+    nameSpan.style.cssText = 'flex: 1; font-weight: 600;';
+
+    // Selector de time (dropdown)
+    const select = document.createElement('select');
+    select.style.cssText = 'padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface);';
+    const numTeams = m.teams.length;
+    for (let t = 0; t < numTeams; t++) {
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = m.teams[t].name;
+      if (m.teams[t].members.includes(p.slot)) opt.selected = true;
+      select.appendChild(opt);
+    }
+    // Ao mudar, move o jogador para o time selecionado
+    select.onchange = () => {
+      const teamId = parseInt(select.value);
+      // Remove de todos os times
+      m.teams.forEach(team => {
+        team.members = team.members.filter(slot => slot !== p.slot);
+      });
+      // Adiciona ao time escolhido
+      if (m.teams[teamId]) {
+        m.teams[teamId].members.push(p.slot);
+      }
+      // Atualiza a interface e salva
+      renderPlay();
+      broadcastState();
+      save();
+      // Reabre o modal para continuar ajustando (ou recria)
+      // Fechamos e reabrimos para refletir as mudanças
+      overlay.remove();
+      openTeamSetupModal();
+    };
+
+    row.appendChild(nameSpan);
+    row.appendChild(select);
+    list.appendChild(row);
+  });
+
+  // Botão fechar
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Pronto';
+  closeBtn.style.cssText = `
+    background: var(--primary); border: 2px solid var(--text); color: var(--text);
+    padding: 10px 20px; border-radius: 12px; font-weight: 700; width: 100%;
+    cursor: pointer; box-shadow: var(--card-shadow-sm);
+  `;
+  closeBtn.onclick = () => overlay.remove();
+
+  panel.appendChild(title);
+  panel.appendChild(list);
+  panel.appendChild(closeBtn);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
+
 function setMatchMode(mode) {
   const m = state.currentMatch;
   if (!m || !m.isHost) return;
@@ -690,19 +784,26 @@ function setMatchMode(mode) {
   }
   m.currentMode = mode;
   if (mode === 'duplas' || mode === 'times') {
-    const numTeams = mode === 'duplas' ? 2 : Math.ceil(m.participants.length / 2);
-    m.teams = [];
-    for (let t = 0; t < numTeams; t++) {
-      m.teams.push({
-        id: t,
-        name: `${mode === 'duplas' ? 'Dupla' : 'Time'} ${t+1}`,
-        members: []
+    // Se já existem times, não recria automaticamente
+    if (!m.teams || m.teams.length === 0) {
+      // Cria times vazios com base no número de jogadores
+      const numTeams = mode === 'duplas' ? 2 : Math.ceil(m.participants.length / 2);
+      m.teams = [];
+      for (let t = 0; t < numTeams; t++) {
+        m.teams.push({
+          id: t,
+          name: `${mode === 'duplas' ? 'Dupla' : 'Time'} ${t+1}`,
+          members: []
+        });
+      }
+      // Distribui os participantes igualmente (automático)
+      m.participants.forEach((p, idx) => {
+        const teamIdx = idx % numTeams;
+        m.teams[teamIdx].members.push(p.slot);
       });
     }
-    m.participants.forEach((p, idx) => {
-      const teamIdx = idx % numTeams;
-      m.teams[teamIdx].members.push(p.slot);
-    });
+    // Abre o modal de edição de times
+    openTeamSetupModal();
   } else {
     m.teams = [];
   }
@@ -773,6 +874,11 @@ function renderPlay() {
             ${mode === 'individual' ? '👤 Individual' : mode === 'duplas' ? '👥 Duplas' : '🏆 Times'}
           </button>
         `).join('')}
+        ${(m.currentMode === 'duplas' || m.currentMode === 'times') ? `
+          <button class="btn btn-sm btn-secondary" onclick="openTeamSetupModal()" style="border-radius:20px;padding:4px 14px;">
+            ⚙️ Organizar Times
+          </button>
+        ` : ''}
       </div>
     `;
   } else {
