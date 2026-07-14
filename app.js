@@ -19,6 +19,8 @@ function applyTheme(id) {
 function selectTheme(id, el) {
   SFX.tap();
   applyTheme(id);
+  // 🔥 AGORA SALVA O TEMA NA NUVEM IMEDIATAMENTE
+  cloudUpsertPreferences();
   document.querySelectorAll('.theme-card').forEach(c => {
     c.classList.toggle('selected', c.dataset.themeId === id);
   });
@@ -1346,7 +1348,7 @@ function confirmIdentityAndJoin() {
   profile.nickname = name;
   profile.avatar = pendingIdentityAvatar;
   localStorage.setItem('tt_profile', JSON.stringify(profile));
-  cloudUpsertPreferences(); // Salva no banco
+  cloudUpsertPreferences();
   closeIdentityModal();
   const code = pendingJoinCode;
   pendingJoinCode = null;
@@ -1390,7 +1392,6 @@ function loadProfile() {
   } catch(e) {}
 }
 
-// Salva no localStorage e envia para a nuvem (se logado)
 function saveProfile() {
   profile.nickname = document.getElementById('profile-nickname')?.value.trim() || '';
   localStorage.setItem('tt_profile', JSON.stringify(profile));
@@ -1438,7 +1439,6 @@ function renderProfile() {
   const wEl = document.getElementById('stat-wins'); if (wEl) wEl.textContent = wins;
 }
 
-// Sincroniza perfil com a nuvem
 function profileToRow(p) {
   return {
     user_id: cloudUserId,
@@ -1452,7 +1452,7 @@ function profileToRow(p) {
 
 async function cloudUpsertPreferences() {
   if (!sb || !cloudUserId) return;
-  console.log('Salvando preferências na nuvem:', profile.nickname, profile.avatar ? 'com avatar' : 'sem avatar');
+  console.log('Salvando preferências na nuvem:', profile.nickname, 'tema:', currentTheme);
   const { error } = await sb.from('user_preferences').upsert(profileToRow(profile), { onConflict: 'user_id' });
   if (error) console.error('Falha ao salvar preferências:', error);
   else console.log('Preferências salvas com sucesso');
@@ -1471,7 +1471,6 @@ async function cloudPullPreferences() {
     profile.avatar = data.avatar || '';
     localStorage.setItem('tt_profile', JSON.stringify(profile));
     renderProfile();
-    // Também aplica tema e grain se vierem
     if (data.theme) { applyTheme(data.theme); buildThemeGrid('settings-theme-grid'); }
     if (data.grain !== undefined) { toggleGrain(data.grain); }
   }
@@ -1531,18 +1530,28 @@ function stopMusic() {
   toast('Música pausada');
 }
 
-// SUPABASE
-const SUPABASE_URL = 'https://obnxqnllrrkoznxxnwkh.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ibnhxbmxscnJrb3pueHhud2toIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzIwMzIsImV4cCI6MjA5OTU0ODAzMn0.Yy94y6YVXnHYMbunney-hCCp5NbYtNTozaLKuCnXUrQ';
+// ═══════════════════════════════════════════════
+// SUPABASE — CREDENCIAIS VIA .env (SEGURAS!)
+// ═══════════════════════════════════════════════
+
+// 🔥 AGORA AS CREDENCIAIS VÊM DO .env — NUNCA MAIS EXPOSTAS NO CÓDIGO!
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 let sb = null;
-try {
-  const mod = window.supabase;
-  if (mod && mod.createClient) {
-    sb = mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  } else {
-    console.warn('Supabase lib not found on window.supabase');
-  }
-} catch(e) { console.warn('Supabase init failed:', e); }
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.warn('⚠️ Supabase credentials not found in environment variables. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.');
+} else {
+  try {
+    const mod = window.supabase;
+    if (mod && mod.createClient) {
+      sb = mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      console.log('✅ Supabase client initialized from environment variables.');
+    } else {
+      console.warn('Supabase lib not found on window.supabase');
+    }
+  } catch(e) { console.warn('Supabase init failed:', e); }
+}
 
 // ═══════════════════════════════════════════════
 // SINCRONIZAÇÃO COM A NUVEM (jogos, partidas e perfil)
@@ -1640,13 +1649,11 @@ async function pullCloudData() {
     console.log(`☁️ Nuvem: ${cloudGames.length} jogos, ${cloudMatches.length} partidas`);
     console.log(`💻 Local: ${state.games.length} jogos, ${state.matches.length} partidas`);
 
-    // 1. Envia para a nuvem os jogos/partidas locais que ainda não estão lá
     const localGameIds = new Set(state.games.map(g => g.id));
     const cloudGameIds = new Set(cloudGames.map(g => g.id));
     const localMatchIds = new Set(state.matches.map(m => m.id));
     const cloudMatchIds = new Set(cloudMatches.map(m => m.id));
 
-    // Envia jogos locais que não estão na nuvem
     const onlyLocalGames = state.games.filter(g => !cloudGameIds.has(g.id));
     const onlyLocalMatches = state.matches.filter(m => !cloudMatchIds.has(m.id));
     if (onlyLocalGames.length) {
@@ -1658,10 +1665,7 @@ async function pullCloudData() {
       await Promise.all(onlyLocalMatches.map(cloudUpsertMatch));
     }
 
-    // 2. Mescla: dados da nuvem substituem os locais apenas se existirem na nuvem
-    // Mantém os locais que não estão na nuvem (já foram enviados acima)
     const mergedGames = [...cloudGames];
-    // Adiciona jogos locais que não estão na nuvem (ou que falharam no envio)
     state.games.forEach(g => {
       if (!cloudGameIds.has(g.id)) {
         mergedGames.push(g);
@@ -1771,7 +1775,6 @@ if (sb) {
       if (_cameFromOAuth) toast('Login realizado!');
       const splash = document.getElementById('splash');
       if (splash && splash.style.display !== 'none') enterApp();
-      // Puxa dados e perfil (merge)
       pullCloudData().then(() => cloudPullPreferences());
     }
     if (event === 'SIGNED_OUT') {
@@ -1983,9 +1986,7 @@ if (['library','play','history','settings'].includes(initHash)) {
   navTo('library');
 }
 
-// Retoma a sala em andamento (se havia uma) em vez de perder tudo a cada reload —
-// isso é o que fazia parecer que "a sala não fica salva" e que os participantes
-// sumiam na rodada seguinte.
+// Retoma a sala em andamento (se havia uma)
 (function resumeRoomIfAny() {
   const m = state.currentMatch;
   if (m && m.roomCode && !m.ended) {
@@ -1996,7 +1997,7 @@ if (['library','play','history','settings'].includes(initHash)) {
     }, 600);
   }
 })();
-// Se voltou do OAuth do Google, o access_token vem no hash — entra no app direto sem precisar clicar
+// Se voltou do OAuth do Google, o access_token vem no hash — entra no app direto
 (function checkOAuthRedirect() {
   if (window.location.hash && window.location.hash.includes('access_token')) {
     history.replaceState(null, '', window.location.pathname);
