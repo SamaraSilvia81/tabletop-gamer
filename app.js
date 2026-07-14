@@ -54,6 +54,277 @@ function selectThemeModal(id, el) {
 applyTheme(currentTheme);
 
 // ============================================================
+//  PRESETS DE JOGOS POPULARES
+// ============================================================
+const GAME_PRESETS = [
+  {
+    id: 'domino',
+    name: 'Dominó',
+    emoji: 'puzzle',
+    type: 'pedras',
+    scoring: 'low',
+    players: ['Jogador 1', 'Jogador 2', 'Jogador 3', 'Jogador 4'],
+    rules: `Objetivo: ser o primeiro a colocar todas as pedras ou, se a partida travar, ter a menor soma dos pontos restantes nas pedras.
+
+Pontuação: quem bate conta os pontos das pedras restantes dos outros. Partida travada: quem tiver menos pontos nas pedras vence e conta a diferença entre os adversários.
+
+Fim de jogo: geralmente se joga até 100 pontos (quem atingir perde) ou por número de rodadas combinado.`,
+    formulas: [
+      { label: 'Batida simples', value: -10 },
+      { label: 'Carroca (par)', value: -20 },
+      { label: 'Lá-e-lô (seq. igual)', value: -30 },
+      { label: 'Cruzada (perpendicular)', value: -40 },
+    ]
+  },
+  {
+    id: 'truco',
+    name: 'Truco Paulista',
+    emoji: 'cards',
+    type: 'cartas',
+    scoring: 'high',
+    players: ['Dupla A', 'Dupla B'],
+    rules: `Objetivo: chegar a 12 pontos antes do adversário.
+
+Mão vale 1 ponto. Truco sobe para 3, Seis para 6, Nove para 9, Doze para 12.
+
+Hierarquia das cartas: 4 de paus (zap) > 7 de copas > As de espadas > 7 de espadas > 3 > 2 > As (exceto espadas) > K > J > Q > 7 (exceto 7♥ e 7♠) > 6 > 5 > 4.
+
+Mão de 10: quando um time está com 10 pontos, a mão passa a valer 3 pontos automaticamente.`,
+    formulas: [
+      { label: 'Mão (1 pto)', value: 1 },
+      { label: 'Truco aceito (3 ptos)', value: 3 },
+      { label: 'Seis aceito (6 ptos)', value: 6 },
+      { label: 'Nove aceito (9 ptos)', value: 9 },
+      { label: 'Doze aceito (12 ptos)', value: 12 },
+      { label: 'Correu (1 pto)', value: 1 },
+    ]
+  },
+  {
+    id: 'buraco',
+    name: 'Buraco',
+    emoji: 'cards',
+    type: 'cartas',
+    scoring: 'high',
+    players: ['Dupla A', 'Dupla B'],
+    rules: `Objetivo: atingir 3000 pontos (ou valor combinado) antes das duplas adversárias.
+
+Cada rodada termina quando um jogador bate (desce todas as cartas) ou o monte acaba.
+
+Pontuação das cartas: Ás = 15 pts · Coringas e 2 = 20 pts · K, Q, J, 10, 9, 8 = 10 pts · 7 a 3 = 5 pts.
+
+Buraco limpo (sem curinga/2): bônus de 200 pts. Buraco sujo: 100 pts. Quem bate: +100 pts. Cartas na mão: -valor na contagem.
+
+Morto (se não pegou o pé): penalidade de -100 pts + valor das cartas na mão.`,
+    formulas: [
+      { label: 'Buraco limpo (+200)', value: 200 },
+      { label: 'Buraco sujo (+100)', value: 100 },
+      { label: 'Bateu (+100)', value: 100 },
+      { label: 'Morto (-100)', value: -100 },
+    ]
+  },
+  {
+    id: 'uno',
+    name: 'UNO',
+    emoji: 'cards',
+    type: 'cartas',
+    scoring: 'low',
+    players: ['Jogador 1', 'Jogador 2', 'Jogador 3', 'Jogador 4'],
+    rules: `Objetivo: ser o primeiro a descartar todas as cartas ou acumular menos pontos ao longo das rodadas.
+
+Quem bate conta os pontos nas mãos dos outros jogadores:
+- Cartas de ação (Pula, Inverter, +2) = 20 pts cada
+- Coringas e +4 = 50 pts cada
+- Cartas numéricas = valor facial
+
+Lembre-se: gritar UNO ao ficar com 1 carta. Pego sem gritar: compra 2.
+
+O jogo termina quando um jogador atingir 500 pontos (esse jogador perde). Quem tiver menos pontos ao final vence.`,
+    formulas: [
+      { label: 'Carta de ação (20)', value: 20 },
+      { label: 'Coringa/+4 (50)', value: 50 },
+    ]
+  },
+  {
+    id: 'canastra',
+    name: 'Canastra',
+    emoji: 'cards',
+    type: 'cartas',
+    scoring: 'high',
+    players: ['Dupla A', 'Dupla B'],
+    rules: `Objetivo: atingir 5000 pontos (ou valor combinado).
+
+Canastras: 7 cartas do mesmo valor.
+- Canastra limpa (sem curinga): 200 pts
+- Canastra suja (com curinga): 100 pts
+- Canastra real (7 de ouros = curinga natural): 500 pts
+
+Pontuação: Coringas/2 = 20 pts · Ás = 15 pts · 8 ao K = 10 pts · 3 ao 7 = 5 pts · 4 de preto = -100 pts
+
+Batida limpa (sem cartas na mão): +100 pts extras. Quem não baixou: todas as cartas na mão valem negativo.`,
+    formulas: [
+      { label: 'Canastra limpa (+200)', value: 200 },
+      { label: 'Canastra suja (+100)', value: 100 },
+      { label: 'Canastra real (+500)', value: 500 },
+      { label: 'Batida limpa (+100)', value: 100 },
+      { label: '4 de preto (-100)', value: -100 },
+    ]
+  },
+  {
+    id: 'sueca',
+    name: 'Sueca',
+    emoji: 'cards',
+    type: 'cartas',
+    scoring: 'high',
+    players: ['Dupla A', 'Dupla B'],
+    rules: `Jogo de duplas com 40 cartas (sem 8, 9 e 10). São 120 pontos distribuídos.
+
+Hierarquia: Ás (11), 7 (10), K (4), J (3), Q (2) · demais valem 0.
+
+Pontuação por rodada:
+- Mais de 90 pts: 4 pontos de jogo
+- 61 a 90 pts: 2 pontos
+- Carrasca (120 pts — todos os pontos): 8 pontos
+- Adversário não fez pontos: dobro da vitória
+
+Vence quem atingir 7 pontos de jogo primeiro.`,
+    formulas: [
+      { label: 'Vitória simples (+2)', value: 2 },
+      { label: 'Esbordoada 90+ (+4)', value: 4 },
+      { label: 'Carrasca (+8)', value: 8 },
+    ]
+  },
+  {
+    id: 'bozó',
+    name: 'Bozó (Yahtzee)',
+    emoji: 'dice',
+    type: 'dados',
+    scoring: 'high',
+    players: ['Jogador 1', 'Jogador 2', 'Jogador 3', 'Jogador 4'],
+    rules: `Cada jogador tem 3 lançamentos por turno para tentar encaixar combinações.
+
+Combinações (parte de cima): 1s a 6s — soma dos dados iguais.
+Combinações especiais:
+- Trinca: 3 dados iguais — soma dos 5 dados
+- Quadra: 4 dados iguais — soma dos 5 dados
+- Full house: trinca + par — 25 pts
+- Sequência pequena: 4 em sequência — 30 pts
+- Sequência grande: 5 em sequência — 40 pts
+- Bozó (5 iguais): 50 pts
+- Acaso: soma de todos os dados
+
+Bônus: se a soma da parte de cima for ≥ 63, ganhe +35 pts.`,
+    formulas: [
+      { label: 'Full house (25)', value: 25 },
+      { label: 'Seq. pequena (30)', value: 30 },
+      { label: 'Seq. grande (40)', value: 40 },
+      { label: 'Bozó! (50)', value: 50 },
+      { label: 'Bônus topo (35)', value: 35 },
+    ]
+  },
+  {
+    id: 'cambio',
+    name: 'Câmbio',
+    emoji: 'cards',
+    type: 'cartas',
+    scoring: 'low',
+    players: ['Jogador 1', 'Jogador 2', 'Jogador 3', 'Jogador 4'],
+    rules: `Objetivo: ter a menor soma de cartas na mão ao gritar "Câmbio!".
+
+Cada jogador começa com 4 cartas viradas para baixo. Pode ver 2 delas no início.
+A cada turno: compre do monte ou do descarte; descarte uma carta.
+
+Valores: Ás = 1, 2 = 2... 10 = 10, J/Q = 11/12, K = 0.
+
+Cartas especiais: 7♥ e 7♦ = ver uma carta sua · 8♥ e 8♦ = ver carta do adversário · 9 e 10 = trocar carta cega com adversário.
+
+Câmbio: quem grita vira tudo. Quem chamou e não tiver a menor soma paga penalidade (+50 pts).`,
+    formulas: [
+      { label: 'Câmbio errado (+50)', value: 50 },
+    ]
+  },
+];
+
+function applyGamePreset(presetId) {
+  const preset = GAME_PRESETS.find(p => p.id === presetId);
+  if (!preset) return;
+
+  // Preenche os campos do setup
+  document.getElementById('setup-name').value = preset.name;
+  document.getElementById('setup-rules').value = preset.rules;
+
+  setup.emoji = preset.emoji;
+  setup.type = preset.type;
+  setup.scoring = preset.scoring;
+  setup.playerCount = preset.players.length;
+  setup.formulas = JSON.parse(JSON.stringify(preset.formulas));
+
+  // Atualiza UI
+  initEmojiGrid();
+  document.querySelectorAll('.type-option').forEach(el => el.classList.toggle('selected', el.dataset.type === setup.type));
+  document.querySelectorAll('.scoring-option').forEach(el => el.classList.toggle('selected', el.dataset.scoring === setup.scoring));
+  document.getElementById('player-count-display').textContent = setup.playerCount;
+  renderPlayerInputs();
+  renderFormulaEditor();
+
+  // Preenche nomes dos jogadores após render
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('#player-names input');
+    preset.players.forEach((p, i) => { if (inputs[i]) inputs[i].value = p; });
+  }, 10);
+
+  // Fecha o modal de preset
+  const pm = document.getElementById('preset-modal');
+  if (pm) pm.classList.remove('active');
+
+  SFX.confirm();
+  toast(`Modelo "${preset.name}" aplicado ✓`);
+}
+
+function openPresetModal() {
+  SFX.tap();
+  let pm = document.getElementById('preset-modal');
+  if (!pm) {
+    pm = document.createElement('div');
+    pm.id = 'preset-modal';
+    pm.className = 'music-modal';
+    pm.onclick = (e) => { if (e.target === pm) pm.classList.remove('active'); };
+    pm.innerHTML = `
+      <div class="music-panel" style="max-height:80vh;overflow-y:auto;">
+        <div class="music-handle"></div>
+        <div class="music-panel-title"><i class="ph ph-book-open-text"></i> Modelos de Jogos</div>
+        <p style="font-size:0.8rem;color:var(--text-2);margin-bottom:14px;line-height:1.5;">
+          Escolha um jogo para pré-preencher as regras e fórmulas de pontuação. Você pode editar tudo depois.
+        </p>
+        <div style="display:grid;gap:10px;">
+          ${GAME_PRESETS.map(p => `
+            <button onclick="applyGamePreset('${p.id}')" style="
+              display:flex;align-items:center;gap:12px;
+              background:var(--surface-2);border:1.5px solid var(--border);
+              border-radius:12px;padding:12px 14px;cursor:pointer;
+              text-align:left;font-family:inherit;color:var(--text);
+              transition:border-color 0.15s,background 0.15s;
+            " onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
+              <span style="font-size:1.5rem;">${getIconSVG(p.emoji, 30)}</span>
+              <div>
+                <div style="font-weight:700;font-size:0.9rem;">${p.name}</div>
+                <div style="font-size:0.7rem;color:var(--text-3);margin-top:2px;">
+                  ${p.players.length} jogadores · ${p.type} · ${p.scoring === 'high' ? '↑ Maior vence' : '↓ Menor vence'} · ${p.formulas.length} regra${p.formulas.length !== 1 ? 's' : ''}
+                </div>
+              </div>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(pm);
+  }
+  pm.classList.add('active');
+}
+
+window.applyGamePreset = applyGamePreset;
+window.openPresetModal = openPresetModal;
+
+// ============================================================
 //  FUNÇÕES GLOBAIS (para onclick no HTML)
 // ============================================================
 function enterApp() {
@@ -1883,6 +2154,45 @@ function subscribeRoom(code, isHost) {
     if (isHost) broadcastState();
   });
 
+  // Handler para pontuação de convidado → aplicado pelo host (e rebroadcast)
+  // Isso garante que 4 pessoas mandando ao mesmo tempo não colidam:
+  // cada msg é processada em sequência pelo handler do host
+  roomChannel.on('broadcast', { event: 'player-score' }, ({ payload }) => {
+    if (!state.currentMatch?.isHost) return; // só o host processa
+    const m = state.currentMatch;
+    const { slots, value, label, appliedBy } = payload;
+    if (!Array.isArray(slots)) return;
+    slots.forEach(slot => {
+      if (slot >= 0 && slot < m.players.length) {
+        m.scores[slot] += value;
+        if (!m.log) m.log = [];
+        m.log.push({
+          player: slot,
+          label: label || '?',
+          value,
+          ts: new Date().toISOString(),
+          appliedBy: appliedBy || 'Convidado'
+        });
+      }
+    });
+    renderPlay();
+    save();
+    broadcastState(); // redistribui o estado atualizado para todos
+  });
+
+  // Handler para timer de guest → só host
+  roomChannel.on('broadcast', { event: 'timer-sync' }, ({ payload }) => {
+    if (state.currentMatch?.isHost) return; // host ignora
+    timerSeconds = payload.seconds ?? timerSeconds;
+    timerLimit = payload.limit ?? timerLimit;
+    if (payload.running && !timerInterval) {
+      startTimer();
+    } else if (!payload.running && timerInterval) {
+      pauseTimer();
+    }
+    updateTimerDisplay();
+  });
+
   roomChannel.subscribe();
 }
 
@@ -2794,5 +3104,7 @@ window.toggleTimerV2 = toggleTimerV2;
 window.setTimerModeV2 = setTimerModeV2;
 window.resetTimer = resetTimer;
 window.setTimerLimit = setTimerLimit;
+window.applyGamePreset = applyGamePreset;
+window.openPresetModal = openPresetModal;
 
 console.log('✅ Todas as funções foram expostas globalmente.');
