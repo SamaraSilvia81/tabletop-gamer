@@ -722,15 +722,16 @@ function renderPlay() {
           : `<span style="font-weight:700;font-size:0.8rem;color:#fff;">${i+1}</span>`;
         const isMySlot = part && part.nickname === profile.nickname;
         const isDisabled = !isHost && !isMySlot;
+        // Nome exibido: nickname de quem ocupou o slot, ou nome do slot se vago
+        const displayName = part ? part.nickname : name;
         return `
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;${isMySlot ? `background:var(--leader-bg);border-radius:10px;padding:4px 6px;margin-left:-6px;margin-right:-6px;` : ''}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
             <div style="display:flex;align-items:center;gap:6px;flex:1;">
               <div style="width:26px;height:26px;border-radius:50%;background:${bgColor};border:1.5px solid var(--text);overflow:hidden;flex-shrink:0;display:grid;place-items:center;">
                 ${avatarContent}
               </div>
-              <span class="round-row-name" style="font-weight:600;">${name}</span>
-              ${isMySlot ? `<span style="font-size:0.6rem;color:var(--primary-dim);font-weight:700;">(você)</span>` : ''}
-              ${part ? `<span style="font-size:0.6rem;color:var(--text-3);">(${part.nickname})</span>` : `<span style="font-size:0.6rem;color:var(--text-3);">(vago)</span>`}
+              <span class="round-row-name" style="font-weight:600;">${displayName}</span>
+              ${!part ? `<span style="font-size:0.6rem;color:var(--text-3);">(vago)</span>` : ''}
               ${part && part.isHost ? `<span style="font-size:0.6rem;color:var(--primary);">👑</span>` : ''}
             </div>
             <input type="number" id="ri-${i}" value="0" inputmode="numeric" onfocus="this.select()" ${isDisabled ? 'disabled' : ''} style="width:70px;text-align:center;padding:6px;border-radius:8px;border:1.5px solid var(--border);background:${isDisabled ? 'var(--surface-3)' : 'var(--surface-2)'};">
