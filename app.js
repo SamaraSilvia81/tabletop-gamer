@@ -5,36 +5,15 @@ const THEMES = [
     swatches: ['#FAF6EE', '#BB240A', '#322470', '#EDCC4D'] },
   { id: 'retrogame',  name: 'Retro Videogame', desc: 'Mostarda · Coral · Roxo · Verde',
     swatches: ['#FFC567', '#FD5A46', '#552CB7', '#00995E'] },
-  { id: 'dark',       name: 'Dark Board', desc: 'Escuro · Dourado · Vinho · Gelo',
-    swatches: ['#1A1A1A', '#D9A441', '#8E3542', '#4A9B7F'] },
-  { id: 'noir',       name: 'Noir', desc: 'Preto · Branco · Cinza · Prata',
-    swatches: ['#000000', '#FFFFFF', '#888888', '#CCCCCC'] },
 ];
 
 let currentTheme = localStorage.getItem('tt_theme') || 'prateleira';
-let darkMode = localStorage.getItem('tt_dark') === 'true';
 
-function applyTheme(id, forceDark) {
+function applyTheme(id) {
   currentTheme = id;
-  const dark = (forceDark !== undefined) ? forceDark : darkMode;
-  const themeId = dark ? id + '-dark' : id;
-  document.body.setAttribute('data-theme', themeId);
-  document.getElementById('splash').setAttribute('data-theme', themeId);
+  document.body.setAttribute('data-theme', id);
+  document.getElementById('splash').setAttribute('data-theme', id);
   localStorage.setItem('tt_theme', id);
-  localStorage.setItem('tt_dark', dark ? 'true' : 'false');
-  const toggle = document.getElementById('dark-mode-toggle');
-  if (toggle) toggle.checked = dark;
-  updateDarkModeText(dark);
-}
-
-function toggleDarkMode(enabled) {
-  darkMode = enabled;
-  applyTheme(currentTheme, enabled);
-}
-
-function updateDarkModeText(enabled) {
-  const label = document.querySelector('.card:has(#dark-mode-toggle) .flex-between div:first-child div:last-child');
-  if (label) label.textContent = enabled ? 'Fundo escuro ativado' : 'Mantém o fundo claro do tema';
 }
 
 function selectTheme(id, el) {
@@ -45,7 +24,7 @@ function selectTheme(id, el) {
   });
 }
 
-function buildThemeGrid(containerId, small) {
+function buildThemeGrid(containerId) {
   const c = document.getElementById(containerId);
   if (!c) return;
   c.innerHTML = THEMES.map(t => `
@@ -53,7 +32,7 @@ function buildThemeGrid(containerId, small) {
          data-theme-id="${t.id}"
          onclick="selectThemeModal('${t.id}', this)">
       <div class="theme-swatches">
-        ${t.swatches.map((s,i) => `<div class="theme-swatch" style="background:${s};${s==='#F5EDD6'||s==='#F0F4F8'||s==='#FAF6EE'||s==='#EAF4F4'||s==='#F9F7F4'||s==='#1A1A1A'||s==='#000000' ? 'border:1px solid rgba(0,0,0,0.08);' : ''}"></div>`).join('')}
+        ${t.swatches.map(s => `<div class="theme-swatch" style="background:${s};border:1px solid rgba(0,0,0,0.08);"></div>`).join('')}
       </div>
       <div class="theme-name">${t.name}</div>
       <div class="theme-desc">${t.desc}</div>
@@ -70,7 +49,6 @@ function selectThemeModal(id, el) {
 
 applyTheme(currentTheme);
 
-// SPLASH
 function enterApp() {
   SFX.confirm();
   const splash = document.getElementById('splash');
@@ -78,7 +56,6 @@ function enterApp() {
   setTimeout(() => { splash.style.display = 'none'; }, 500);
 }
 
-// SOUND ENGINE
 const SFX = (() => {
   let ctx;
   const getCtx = () => { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); return ctx; };
@@ -102,7 +79,6 @@ const SFX = (() => {
   };
 })();
 
-// STATE
 const PIXEL_ICONS = [
   { id:'dice',    label:'Dado',      color:'primary' },
   { id:'cards',   label:'Cartas',    color:'accent' },
@@ -164,11 +140,7 @@ const THEME_COLORS = {
   prateleira: { primary:'#D9A441', secondary:'#4A9B7F', accent:'#8E3542', info:'#3B62B8', purple:'#6846C6', text:'#241A0E' },
   picnic:     { primary:'#BB240A', secondary:'#322470', accent:'#EDCC4D', info:'#5A7A30', purple:'#7A3560', text:'#2A1A08' },
   retrogame:  { primary:'#FD5A46', secondary:'#552CB7', accent:'#FFC567', info:'#00995E', purple:'#552CB7', text:'#1A1208' },
-  dark:       { primary:'#D9A441', secondary:'#4A9B7F', accent:'#8E3542', info:'#3B62B8', purple:'#6846C6', text:'#EAE2D6' },
-  noir:       { primary:'#FFFFFF', secondary:'#CCCCCC', accent:'#888888', info:'#AAAAAA', purple:'#999999', text:'#FFFFFF' },
 };
-
-const EMOJIS = PIXEL_ICONS.map(p => p.id);
 
 const FONTS = [
   { id: 'playfair',  name: 'Playfair',  css: "'Playfair Display', serif",   preview: 'Aa' },
@@ -203,7 +175,6 @@ const save = () => {
 
 let setup = { emoji:'dice', type:'cartas', scoring:'high', playerCount:2, font:'playfair', wallpaper:'', wpPosX:50, wpPosY:50, wpZoom:100, formulas:[] };
 
-// NAV
 function navTo(v) {
   SFX.click();
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === v));
@@ -234,7 +205,6 @@ function spawnConfetti() {
   setTimeout(() => c.innerHTML = '', 3200);
 }
 
-// FONT PICKER
 function initFontGrid() {
   document.getElementById('font-grid').innerHTML = FONTS.map(f => `
     <div class="font-option ${f.id === setup.font ? 'selected' : ''}"
@@ -256,7 +226,6 @@ function getFontCSS(fontId) {
   return (FONTS.find(f => f.id === fontId) || FONTS[0]).css;
 }
 
-// WALLPAPER
 function previewWallpaper() {
   const url = document.getElementById('setup-wallpaper').value.trim();
   setup.wallpaper = url;
@@ -266,13 +235,10 @@ function previewWallpaper() {
 function handleWallpaperFile(e) {
   const file = e.target.files[0];
   if (!file) return;
-
   const preview = document.getElementById('wp-preview');
-  preview.innerHTML = `<div class="wp-label" style="color:var(--text-2);">⏳ Processando imagem...</div>`;
-
+  preview.innerHTML = `<div class="wp-label" style="color:var(--text-2);">⏳ Processando...</div>`;
   const saveBtn = document.querySelector('.modal-save');
   if (saveBtn) saveBtn.disabled = true;
-
   const reader = new FileReader();
   reader.onload = ev => {
     const img = new Image();
@@ -291,7 +257,7 @@ function handleWallpaperFile(e) {
       if (saveBtn) saveBtn.disabled = false;
     };
     img.onerror = () => {
-      toast('Não foi possível ler essa imagem. Tente outra.');
+      toast('Erro ao ler imagem.');
       if (saveBtn) saveBtn.disabled = false;
       preview.innerHTML = `<div class="wp-label"><i class="ph ph-image"></i> Erro</div>`;
     };
@@ -327,13 +293,12 @@ function updateWpPosition() {
   applyWallpaperPreview(setup.wallpaper);
 }
 
-// SMART RULES / FORMULAS
 function renderFormulaEditor() {
   const ed = document.getElementById('formula-editor');
   if (setup.formulas.length === 0) { ed.innerHTML = ''; return; }
   ed.innerHTML = setup.formulas.map((f, i) => `
     <div class="formula-row">
-      <input type="text" class="formula-label-input" placeholder="Nome da regra (ex: Carta preta)" value="${f.label}" oninput="updateFormula(${i},'label',this.value)">
+      <input type="text" class="formula-label-input" placeholder="Nome da regra" value="${f.label}" oninput="updateFormula(${i},'label',this.value)">
       <input type="number" class="formula-val-input" placeholder="pts" value="${f.value}" oninput="updateFormula(${i},'value',this.value)">
       <button class="del-formula-btn" onclick="removeFormula(${i})">✕</button>
     </div>`).join('');
@@ -343,8 +308,6 @@ function addFormulaRow() {
   SFX.tap();
   setup.formulas.push({ label: '', value: 0 });
   renderFormulaEditor();
-  const inputs = document.querySelectorAll('.formula-label-input');
-  if (inputs.length) inputs[inputs.length - 1].focus();
 }
 
 function updateFormula(i, key, val) {
@@ -357,7 +320,6 @@ function removeFormula(i) {
   renderFormulaEditor();
 }
 
-// SETUP MODAL
 function getIconSVG(id, size) {
   const icon = PIXEL_ICONS.find(p => p.id === id);
   if (!icon) return id;
@@ -485,7 +447,6 @@ function saveGame() {
     toast('Aguarde o processamento da imagem');
     return;
   }
-
   const name = document.getElementById('setup-name').value.trim();
   if (!name) { SFX.error(); toast('Dê um nome ao jogo!'); return; }
   const players = Array.from(document.querySelectorAll('#player-names input')).map((inp,i) => inp.value.trim() || `Jogador ${i+1}`);
@@ -517,7 +478,6 @@ function saveGame() {
   toast(state.editingGameId ? 'Jogo atualizado ✓' : 'Jogo criado ✓');
 }
 
-// LIBRARY
 const TM = { cartas:'Cartas', tabuleiro:'Tabuleiro', dados:'Dados', palavras:'Palavras' };
 
 function renderLibrary() {
@@ -551,7 +511,6 @@ function deleteGame(id) {
   toast('Jogo excluído');
 }
 
-// GAMEPLAY
 function startMatch(gid) {
   const g = state.games.find(x => x.id === gid);
   if (!g) return;
@@ -597,78 +556,7 @@ function renderPlay() {
   const fontCSS = getFontCSS(m.font);
   const isHost = m.isHost;
 
-  let roundHTML = `
-    <div class="card">
-      <div class="round-header">
-        <span class="round-title">Nova rodada</span>
-        <span class="round-num">R${m.rounds.length+1}</span>
-      </div>
-      ${m.players.map((name, i) => {
-        const part = m.participants.find(p => p.slot === i);
-        let avatarContent = '<i class="ph ph-user" style="font-size:1rem;display:flex;align-items:center;justify-content:center;height:100%;"></i>';
-        let bgColor = 'var(--primary)';
-        if (part) {
-          if (part.avatar) {
-            avatarContent = `<img src="${part.avatar}" style="width:100%;height:100%;object-fit:cover;">`;
-            bgColor = 'transparent';
-          } else {
-            const color = getAvatarColor(part.nickname);
-            bgColor = color;
-          }
-        }
-        const isMySlot = part && part.nickname === profile.nickname;
-        const isDisabled = !isHost && !isMySlot;
-        return `
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-            <div style="display:flex;align-items:center;gap:6px;flex:1;">
-              <div style="width:26px;height:26px;border-radius:50%;background:${bgColor};border:1.5px solid var(--text);overflow:hidden;flex-shrink:0;">
-                ${avatarContent}
-              </div>
-              <span class="round-row-name" style="font-weight:600;">${name}</span>
-              ${part ? `<span style="font-size:0.6rem;color:var(--text-3);">(${part.nickname})</span>` : `<span style="font-size:0.6rem;color:var(--text-3);">(vago)</span>`}
-              ${part && part.isHost ? `<span style="font-size:0.6rem;color:var(--primary);">👑</span>` : ''}
-            </div>
-            <input type="number" id="ri-${i}" value="0" inputmode="numeric" onfocus="this.select()" ${isDisabled ? 'disabled' : ''} style="width:70px;text-align:center;padding:6px;border-radius:8px;border:1.5px solid var(--border);background:${isDisabled ? 'var(--surface-3)' : 'var(--surface-2)'};">
-          </div>
-          <div style="padding-left:38px;margin-top:-4px;margin-bottom:10px;">
-            <input type="text" class="form-input" id="rn-${i}" placeholder="Anotação: ex. trinca de copas, par de reis..." style="font-size:0.75rem;padding:7px 10px;border-radius:8px;" ${isDisabled ? 'disabled' : ''}>
-          </div>
-        `;
-      }).join('')}
-      <button class="btn btn-primary btn-block btn-round mt-12" onclick="confirmRound()"><i class="ph ph-check"></i> Confirmar Rodada</button>
-    </div>
-  `;
-
-  let smartPanel = '';
-  if (m.formulas && m.formulas.length) {
-    let playerOpts = '';
-    if (isHost) {
-      playerOpts = m.players.map((p,pi) => `<option value="${pi}">${p}</option>`).join('');
-    } else {
-      const myPart = m.participants.find(p => p.nickname === profile.nickname);
-      if (myPart) {
-        playerOpts = `<option value="${myPart.slot}">${m.players[myPart.slot]}</option>`;
-      } else {
-        playerOpts = `<option value="0">${m.players[0]}</option>`;
-      }
-    }
-    const chips = m.formulas.map((f,fi) =>
-      `<button class="formula-chip" onclick="applyFormula(${fi})">${f.label} <strong>${f.value>0?'+':''}${f.value}</strong></button>`
-    ).join('');
-    smartPanel = `
-      <div class="smart-apply-card">
-        <div class="smart-apply-header">
-          <div class="smart-apply-dot"></div>
-          <span class="smart-apply-title">Regras rápidas</span>
-        </div>
-        <div style="margin-bottom:10px;">
-          <label class="form-label" style="margin-bottom:6px;">Jogador</label>
-          <select class="form-input" id="formula-player" style="padding:8px 12px;font-size:0.88rem;">${playerOpts}</select>
-        </div>
-        <div style="margin: -2px;">${chips}</div>
-      </div>`;
-  }
-
+  // HERO COM WALLPAPER
   const heroHTML = `
     <div class="play-hero${m.wallpaper ? ' has-wallpaper' : ''}">
       ${m.wallpaper ? `<div class="play-hero-bg" style="background-image:url('${m.wallpaper}');background-position:${m.wpPosX??50}% ${m.wpPosY??50}%;background-size:${m.wpZoom??100}%;"></div>` : ''}
@@ -715,6 +603,36 @@ function renderPlay() {
     </div>
   `;
 
+  let smartPanel = '';
+  if (m.formulas && m.formulas.length) {
+    let playerOpts = '';
+    if (isHost) {
+      playerOpts = m.players.map((p,pi) => `<option value="${pi}">${p}</option>`).join('');
+    } else {
+      const myPart = m.participants.find(p => p.nickname === profile.nickname);
+      if (myPart) {
+        playerOpts = `<option value="${myPart.slot}">${m.players[myPart.slot]}</option>`;
+      } else {
+        playerOpts = `<option value="0">${m.players[0]}</option>`;
+      }
+    }
+    const chips = m.formulas.map((f,fi) =>
+      `<button class="formula-chip" onclick="applyFormula(${fi})">${f.label} <strong>${f.value>0?'+':''}${f.value}</strong></button>`
+    ).join('');
+    smartPanel = `
+      <div class="smart-apply-card">
+        <div class="smart-apply-header">
+          <div class="smart-apply-dot"></div>
+          <span class="smart-apply-title">Regras rápidas</span>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label class="form-label" style="margin-bottom:6px;">Jogador</label>
+          <select class="form-input" id="formula-player" style="padding:8px 12px;font-size:0.88rem;">${playerOpts}</select>
+        </div>
+        <div style="margin: -2px;">${chips}</div>
+      </div>`;
+  }
+
   let logHTML = '';
   if (m.log && m.log.length) {
     logHTML = `
@@ -730,6 +648,43 @@ function renderPlay() {
           </div>`).join('')}
       </div>`;
   }
+
+  // ROUND INPUT – com cores fixas por slot
+  const roundHTML = `
+    <div class="card">
+      <div class="round-header">
+        <span class="round-title">Nova rodada</span>
+        <span class="round-num">R${m.rounds.length+1}</span>
+      </div>
+      ${m.players.map((name, i) => {
+        const part = m.participants.find(p => p.slot === i);
+        // COR FIXA POR SLOT (a menos que tenha avatar)
+        const bgColor = (part && part.avatar) ? 'transparent' : AVATAR_COLORS[i % AVATAR_COLORS.length];
+        let avatarContent = (part && part.avatar)
+          ? `<img src="${part.avatar}" style="width:100%;height:100%;object-fit:cover;">`
+          : `<span style="font-weight:700;font-size:0.8rem;color:#fff;">${i+1}</span>`;
+        const isMySlot = part && part.nickname === profile.nickname;
+        const isDisabled = !isHost && !isMySlot;
+        return `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <div style="display:flex;align-items:center;gap:6px;flex:1;">
+              <div style="width:26px;height:26px;border-radius:50%;background:${bgColor};border:1.5px solid var(--text);overflow:hidden;flex-shrink:0;display:grid;place-items:center;">
+                ${avatarContent}
+              </div>
+              <span class="round-row-name" style="font-weight:600;">${name}</span>
+              ${part ? `<span style="font-size:0.6rem;color:var(--text-3);">(${part.nickname})</span>` : `<span style="font-size:0.6rem;color:var(--text-3);">(vago)</span>`}
+              ${part && part.isHost ? `<span style="font-size:0.6rem;color:var(--primary);">👑</span>` : ''}
+            </div>
+            <input type="number" id="ri-${i}" value="0" inputmode="numeric" onfocus="this.select()" ${isDisabled ? 'disabled' : ''} style="width:70px;text-align:center;padding:6px;border-radius:8px;border:1.5px solid var(--border);background:${isDisabled ? 'var(--surface-3)' : 'var(--surface-2)'};">
+          </div>
+          <div style="padding-left:38px;margin-top:-4px;margin-bottom:10px;">
+            <input type="text" class="form-input" id="rn-${i}" placeholder="Anotação..." style="font-size:0.75rem;padding:7px 10px;border-radius:8px;" ${isDisabled ? 'disabled' : ''}>
+          </div>
+        `;
+      }).join('')}
+      <button class="btn btn-primary btn-block btn-round mt-12" onclick="confirmRound()"><i class="ph ph-check"></i> Confirmar Rodada</button>
+    </div>
+  `;
 
   let historyRoundsHTML = '';
   if (m.rounds.length > 0) {
@@ -749,7 +704,7 @@ function renderPlay() {
       </div>`;
   }
 
-  let actionBar = `
+  const actionBar = `
     <div class="action-bar">
       ${m.rules||m.formulas?.length ? `<button class="btn btn-ghost btn-sm btn-round" onclick="showRules()"><i class="ph ph-scroll"></i> Regras</button>` : ''}
       <button class="btn btn-ghost btn-sm btn-round" onclick="openRoomModal()"><i class="ph ph-users-three"></i> ${m.roomCode ? 'Sala '+m.roomCode : 'Compartilhar'}</button>
@@ -785,40 +740,9 @@ function applyFormula(fi) {
     setTimeout(() => p.remove(), 1100);
   }
   SFX.score();
-  const sorted = getSorted(m);
-  const board = document.querySelector('.card');
-  if (board) {
-    board.innerHTML = `<div class="card-title"><i class="ph ph-trophy"></i> Placar</div>` +
-      sorted.map((p,rank) => `
-        <div class="score-row ${rank===0&&m.rounds.length>0?'leader':''}" id="sr-${p.idx}">
-          <span class="score-rank">${rank===0&&m.rounds.length>0?'<i class="ph ph-crown"></i>':rank+1}</span>
-          <span class="score-name">${p.name}</span>
-          <span class="score-total" id="sv-${p.idx}">${p.score}</span>
-        </div>`).join('');
-  }
+  renderPlay();
   toast(`${f.label}: ${f.value>0?'+':''}${f.value} pts → ${m.players[playerIdx].split(' ')[0]}`);
-  renderLogCard();
   broadcastState();
-}
-
-function renderLogCard() {
-  const m = state.currentMatch;
-  if (!m) return;
-  let card = document.getElementById('log-card');
-  const isHost = m.isHost;
-  const html = m.log.map((entry, li) => ({entry, li})).reverse().map(({entry, li}) => `
-    <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.8rem;">
-      <span style="color:var(--text-2);"><strong style="color:var(--text);">${m.players[entry.player].split(' ')[0]}</strong> — ${entry.label}</span>
-      <span style="display:flex;align-items:center;gap:8px;">
-        <span style="font-family:'JetBrains Mono',monospace;color:${entry.value>=0?'var(--secondary)':'var(--accent)'};">${entry.value>0?'+':''}${entry.value}</span>
-        ${isHost ? `<button class="btn btn-ghost btn-sm" style="padding:2px 6px;" onclick="removeLogEntry(${li})" title="Desfazer"><i class="ph ph-x"></i></button>` : ''}
-      </span>
-    </div>`).join('');
-  if (!card && m.log.length) {
-    renderPlay();
-    return;
-  }
-  if (card) card.innerHTML = `<div class="card-title"><i class="ph ph-receipt"></i> Registro de pontuação</div>${html}`;
 }
 
 function removeLogEntry(li) {
@@ -840,18 +764,6 @@ function confirmRound() {
   m.rounds.push({ scores, notes });
   scores.forEach((s,i) => m.scores[i] += s);
   SFX.score();
-  scores.forEach((s,i) => {
-    if (s !== 0) {
-      const el = document.getElementById(`sv-${i}`);
-      if (el) {
-        const p = document.createElement('span');
-        p.className = `score-particle ${s>0?'particle-pos':'particle-neg'}`;
-        p.textContent = (s>0?'+':'')+s;
-        el.appendChild(p);
-        setTimeout(() => p.remove(), 1100);
-      }
-    }
-  });
   setTimeout(() => { renderPlay(); toast(`Rodada ${m.rounds.length} confirmada`); broadcastState(); }, 380);
 }
 
@@ -931,7 +843,6 @@ function showRules() {
 }
 function closeRulesModal() { document.getElementById('rules-modal').classList.remove('active'); }
 
-// HISTORY
 function renderHistory() {
   const list = document.getElementById('history-list');
   const empty = document.getElementById('empty-history');
@@ -1324,7 +1235,7 @@ function renderProfile() {
   const wEl = document.getElementById('stat-wins'); if (wEl) wEl.textContent = wins;
 }
 
-// MUSIC PLAYER
+// MUSIC
 function ytVideoId(url) {
   try {
     const u = new URL(url);
@@ -1395,9 +1306,10 @@ try {
 async function loginWithGoogle() {
   if (!sb) { toast('Supabase não disponível'); return; }
   try {
+    const redirectTo = window.location.origin + window.location.pathname;
     const { error } = await sb.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin + window.location.pathname }
+      options: { redirectTo }
     });
     if (error) { SFX.error(); toast('Erro: ' + error.message); }
   } catch(e) { SFX.error(); toast('Falha na conexão'); }
@@ -1431,12 +1343,22 @@ async function authAction(action) {
   }
 }
 
+async function deleteAccount() {
+  if (!sb) { toast('Supabase não disponível'); return; }
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) { toast('Nenhum usuário logado'); return; }
+  try {
+    const { error } = await sb.auth.admin.deleteUser(user.id);
+    if (error) { toast('Erro ao apagar conta: ' + error.message); }
+    else { toast('Conta apagada'); await sb.auth.signOut(); updateAuthUI(); }
+  } catch(e) { toast('Erro ao apagar conta'); }
+}
+
 async function updateAuthUI() {
   if (!sb) return;
   const { data: { session } } = await sb.auth.getSession();
   const authCard = document.getElementById('auth-card');
   const loggedDiv = document.getElementById('auth-logged');
-  const contentDiv = document.getElementById('auth-content');
 
   if (session?.user) {
     if (authCard) authCard.style.display = 'none';
@@ -1469,7 +1391,7 @@ if (sb) {
   updateAuthUI();
 }
 
-// SETTINGS: GRAIN TOGGLE
+// GRAIN
 let grainEnabled = localStorage.getItem('tt_grain') !== 'off';
 function toggleGrain(on) {
   grainEnabled = on;
@@ -1481,7 +1403,7 @@ if (!grainEnabled) {
   setTimeout(() => { const g = document.getElementById('grain-toggle'); if(g) g.checked = false; }, 0);
 }
 
-// SETTINGS: DATA EXPORT / CLEAR
+// DATA EXPORT / CLEAR
 function exportData() {
   const data = JSON.stringify({ games: state.games, matches: state.matches }, null, 2);
   const blob = new Blob([data], { type: 'application/json' });
@@ -1498,7 +1420,7 @@ function clearAllData() {
   SFX.remove(); toast('Dados limpos');
 }
 
-// MATCH TIMER
+// TIMER
 let timerInterval = null;
 let timerSeconds = 0;
 let timerLimit = 0;
@@ -1571,7 +1493,6 @@ loadProfile();
 renderLibrary();
 renderHistory();
 renderPlay();
-// If there's a hash on load, navigate to it
 const initHash = window.location.hash.slice(1) || 'library';
 if (['library','play','history','settings'].includes(initHash)) {
   navTo(initHash);
