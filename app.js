@@ -1334,8 +1334,8 @@ async function loginWithGoogle() {
   try {
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const redirectTo = isLocal
-      ? window.location.origin + window.location.pathname + '#library'
-      : 'https://tabletop-gamer.vercel.app/#library';
+      ? window.location.origin + window.location.pathname
+      : 'https://tabletop-gamer.vercel.app/';
     const { error } = await sb.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo }
