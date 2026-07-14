@@ -131,6 +131,18 @@ const ICON_PATHS = {
 
 const AVATAR_COLORS = ['#D9A441','#4A9B7F','#8E3542','#3B62B8','#6846C6','#BB240A','#322470','#EDCC4D','#FD5A46','#552CB7','#00995E','#FFC567'];
 
+const EMOJI_AVATARS = ['🐲','🦊','🐙','🦁','🐧','🦄','🐺','🐸','🐼','🦖','🐝','🐬','🦉','🐳'];
+
+// Renderiza um avatar (foto enviada, emoji escolhido, ou nada) de forma consistente
+// em qualquer lugar do app: participantes da sala, jogadores, perfil, etc.
+function avatarHTML(avatar) {
+  if (!avatar) return '';
+  if (avatar.startsWith('emoji:')) {
+    return `<span style="font-size:1.3em;line-height:1;display:flex;align-items:center;justify-content:center;height:100%;">${avatar.slice(6)}</span>`;
+  }
+  return `<img src="${avatar}" style="width:100%;height:100%;object-fit:cover;">`;
+}
+
 function getAvatarColor(name) {
   if (!name) return '#D9A441';
   let hash = 0;
@@ -418,7 +430,7 @@ function renderPlayerInputs() {
       value = profile.nickname;
     }
     const avatarHtml = (i === 0 && profile.avatar)
-      ? `<img src="${profile.avatar}" style="width:100%;height:100%;object-fit:cover;">`
+      ? avatarHTML(profile.avatar)
       : `<span style="font-weight:700;font-size:0.7rem;">${i+1}</span>`;
     const bgColor = (i === 0 && profile.avatar) ? 'transparent' : AVATAR_COLORS[i % AVATAR_COLORS.length];
     c.innerHTML += `
@@ -705,17 +717,18 @@ function renderPlay() {
         // COR FIXA POR SLOT (a menos que tenha avatar)
         const bgColor = (part && part.avatar) ? 'transparent' : AVATAR_COLORS[i % AVATAR_COLORS.length];
         let avatarContent = (part && part.avatar)
-          ? `<img src="${part.avatar}" style="width:100%;height:100%;object-fit:cover;">`
+          ? avatarHTML(part.avatar)
           : `<span style="font-weight:700;font-size:0.8rem;color:#fff;">${i+1}</span>`;
         const isMySlot = part && part.nickname === profile.nickname;
         const isDisabled = !isHost && !isMySlot;
         return `
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;${isMySlot ? `background:var(--leader-bg);border-radius:10px;padding:4px 6px;margin-left:-6px;margin-right:-6px;` : ''}">
             <div style="display:flex;align-items:center;gap:6px;flex:1;">
               <div style="width:26px;height:26px;border-radius:50%;background:${bgColor};border:1.5px solid var(--text);overflow:hidden;flex-shrink:0;display:grid;place-items:center;">
                 ${avatarContent}
               </div>
               <span class="round-row-name" style="font-weight:600;">${name}</span>
+              ${isMySlot ? `<span style="font-size:0.6rem;color:var(--primary-dim);font-weight:700;">(você)</span>` : ''}
               ${part ? `<span style="font-size:0.6rem;color:var(--text-3);">(${part.nickname})</span>` : `<span style="font-size:0.6rem;color:var(--text-3);">(vago)</span>`}
               ${part && part.isHost ? `<span style="font-size:0.6rem;color:var(--primary);">👑</span>` : ''}
             </div>
@@ -1031,7 +1044,7 @@ function renderRoomParticipants() {
       ${m.participants.map(p => {
         const bgColor = p.avatar ? 'transparent' : getAvatarColor(p.nickname);
         const avatarContent = p.avatar
-          ? `<img src="${p.avatar}" style="width:100%;height:100%;object-fit:cover;">`
+          ? avatarHTML(p.avatar)
           : `<i class="ph ph-user" style="font-size:1rem;display:flex;align-items:center;justify-content:center;height:100%;color:#fff;"></i>`;
         return `
           <div style="display:flex;align-items:center;gap:6px;background:var(--surface-2);border-radius:20px;padding:4px 12px 4px 4px;border:1.5px solid ${p.isHost ? 'var(--primary)' : 'var(--border)'};">
@@ -1211,12 +1224,81 @@ function closeJoinModal(e) {
 function joinRoomFromInput() {
   const code = document.getElementById('join-code-input').value.trim().toUpperCase();
   if (code.length < 4) { toast('Digite um código válido'); return; }
+  closeJoinModal();
+  openIdentityModal(code);
+}
+
+// ═══════════════════════════════════════════════
+// IDENTIDADE AO ENTRAR NA SALA — nome + avatar (foto ou emoji),
+// pra dar pra saber quem é quem, tipo Kahoot.
+// ═══════════════════════════════════════════════
+let pendingJoinCode = null;
+let pendingIdentityAvatar = '';
+
+function openIdentityModal(code) {
+  pendingJoinCode = code;
+  pendingIdentityAvatar = profile.avatar || '';
+  const nickInput = document.getElementById('identity-nickname');
+  if (nickInput) nickInput.value = profile.nickname || '';
+  const grid = document.getElementById('identity-avatar-grid');
+  if (grid) {
+    grid.innerHTML = EMOJI_AVATARS.map(e => {
+      const val = 'emoji:' + e;
+      return `<button type="button" class="emoji-option${pendingIdentityAvatar === val ? ' selected' : ''}" onclick="selectIdentityAvatar('${e}', this)">${e}</button>`;
+    }).join('');
+  }
+  document.getElementById('identity-modal').classList.add('active');
+}
+
+function closeIdentityModal(e) {
+  if (!e || e.target === document.getElementById('identity-modal'))
+    document.getElementById('identity-modal').classList.remove('active');
+}
+
+function selectIdentityAvatar(emoji, el) {
+  SFX.tap();
+  pendingIdentityAvatar = 'emoji:' + emoji;
+  document.querySelectorAll('#identity-avatar-grid .emoji-option').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function handleIdentityAvatarFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 200;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      pendingIdentityAvatar = canvas.toDataURL('image/jpeg', 0.85);
+      document.querySelectorAll('#identity-avatar-grid .emoji-option').forEach(b => b.classList.remove('selected'));
+      toast('Foto definida ✓');
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function confirmIdentityAndJoin() {
+  const name = document.getElementById('identity-nickname')?.value.trim();
+  if (!name) { SFX.error(); toast('Digite seu nome'); return; }
+  profile.nickname = name;
+  profile.avatar = pendingIdentityAvatar;
+  localStorage.setItem('tt_profile', JSON.stringify(profile));
+  closeIdentityModal();
+  const code = pendingJoinCode;
+  pendingJoinCode = null;
   joinRoom(code);
 }
 
 function joinRoom(code) {
   code = code.trim().toUpperCase();
-  document.getElementById('join-status').textContent = 'Entrando na sala...';
+  toast('Entrando na sala...');
   subscribeRoom(code, false);
   setTimeout(() => {
     roomChannel?.send({ type: 'broadcast', event: 'request-sync', payload: {} });
@@ -1224,9 +1306,6 @@ function joinRoom(code) {
   setTimeout(() => {
     if (!state.currentMatch || state.currentMatch.roomCode !== code) {
       toast('Sala não encontrada. Confira o código e tente de novo.');
-      const st = document.getElementById('join-status'); if (st) st.textContent = '';
-    } else {
-      closeJoinModal();
     }
   }, 2500);
 }
@@ -1237,7 +1316,7 @@ function joinRoom(code) {
   if (code) {
     setTimeout(() => {
       enterApp();
-      joinRoom(code);
+      openIdentityModal(code.trim().toUpperCase());
     }, 600);
   }
 })();
@@ -1278,7 +1357,7 @@ function renderProfile() {
   const av = document.getElementById('profile-avatar');
   if (av) {
     av.innerHTML = profile.avatar
-      ? `<img src="${profile.avatar}" style="width:100%;height:100%;object-fit:cover;">`
+      ? avatarHTML(profile.avatar)
       : `<i class="ph ph-camera" style="font-size:1.4rem;color:var(--text);"></i>`;
   }
   const gEl = document.getElementById('stat-games'); if (gEl) gEl.textContent = state.games.length;

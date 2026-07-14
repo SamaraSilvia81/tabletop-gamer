@@ -391,6 +391,28 @@
   </div>
 </div>
 
+<!-- IDENTITY MODAL (nome + avatar antes de entrar numa sala) -->
+<div class="music-modal" id="identity-modal" onclick="closeIdentityModal(event)">
+  <div class="music-panel">
+    <div class="music-handle"></div>
+    <div class="music-panel-title"><i class="ph ph-user-circle"></i> Como quer aparecer na sala?</div>
+    <p style="font-size:0.82rem;color:var(--text-2);margin-bottom:14px;line-height:1.5;">
+      Esse nome e avatar aparecem pra todo mundo na sala, pra dar pra saber quem é quem.
+    </p>
+    <input type="text" class="form-input" id="identity-nickname" placeholder="Seu nome" maxlength="20" style="margin-bottom:14px;text-align:center;font-weight:700;">
+    <label class="form-label" style="margin-bottom:8px;">Avatar</label>
+    <div class="emoji-grid" id="identity-avatar-grid" style="margin-bottom:8px;"></div>
+    <div style="text-align:center;margin-bottom:16px;">
+      <label class="btn btn-ghost btn-sm btn-round" style="cursor:pointer;">
+        <i class="ph ph-camera"></i> Usar uma foto
+        <input type="file" accept="image/*" id="identity-avatar-input" style="display:none" onchange="handleIdentityAvatarFile(event)">
+      </label>
+    </div>
+    <button class="btn btn-primary btn-block btn-round" onclick="confirmIdentityAndJoin()"><i class="ph ph-check"></i> Entrar na sala</button>
+  </div>
+</div>
+
+
 <!-- MUSIC MODAL -->
 <div class="music-modal" id="music-modal" onclick="closeMusicModal(event)">
   <div class="music-panel">
