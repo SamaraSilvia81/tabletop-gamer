@@ -51,7 +51,7 @@ function selectThemeModal(id, el) {
 applyTheme(currentTheme);
 
 // ═══════════════════════════════════════════════
-// FUNÇÕES GLOBAIS QUE O HTML PRECISA
+// FUNÇÕES GLOBAIS
 // ═══════════════════════════════════════════════
 
 function enterApp() {
@@ -208,7 +208,7 @@ const save = () => {
   }
 };
 
-let setup = { emoji:'dice', type:'cartas', scoring:'high', playerCount:2, font:'playfair', wallpaper:'', wpPosX:50, wpPosY:50, wpZoom:100, formulas:[] };
+let setup = { emoji:'dice', type:'cartas', scoring:'high', playerCount:2, font:'playfair', wallpaper:'', wpPosX:50, wpPosY:50, wpZoom:100, formulas:[], teamMode: false };
 
 function navTo(v) {
   SFX.click();
@@ -249,6 +249,9 @@ function spawnConfetti() {
   setTimeout(() => c.innerHTML = '', 3200);
 }
 
+// ═══════════════════════════════════════════════
+// SETUP
+// ═══════════════════════════════════════════════
 function initFontGrid() {
   document.getElementById('font-grid').innerHTML = FONTS.map(f => `
     <div class="font-option ${f.id === setup.font ? 'selected' : ''}"
@@ -417,6 +420,17 @@ function selectScoring(el) {
   setup.scoring = el.dataset.scoring;
 }
 
+// ═══════════════════════════════════════════════
+// SELECT TEAM MODE (com feedback visual)
+// ═══════════════════════════════════════════════
+function selectTeamMode(el, mode) {
+  SFX.tap();
+  document.querySelectorAll('[data-team]').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  setup.teamMode = mode;
+  console.log('Modo selecionado:', mode);
+}
+
 function changePlayerCount(d) {
   SFX.tap();
   setup.playerCount = Math.max(2, Math.min(10, setup.playerCount + d));
@@ -461,19 +475,28 @@ function openSetup(gid) {
         font: g.font || 'playfair',
         wallpaper: savedWallpaper,
         wpPosX: g.wpPosX ?? 50, wpPosY: g.wpPosY ?? 50, wpZoom: g.wpZoom ?? 100,
-        formulas: JSON.parse(JSON.stringify(g.formulas || []))
+        formulas: JSON.parse(JSON.stringify(g.formulas || [])),
+        teamMode: g.teamMode || false
       };
       document.getElementById('setup-name').value = g.name;
       document.getElementById('setup-rules').value = g.rules || '';
       document.getElementById('setup-wallpaper').value = savedWallpaper && !savedWallpaper.startsWith('data:') ? savedWallpaper : (savedWallpaper ? '(arquivo local)' : '');
+      // Marca o modo de jogo selecionado
+      document.querySelectorAll('[data-team]').forEach(el => {
+        const val = el.dataset.team === 'true' ? true : el.dataset.team === 'times' ? 'times' : false;
+        el.classList.toggle('selected', val === setup.teamMode);
+      });
     }
     document.getElementById('setup-modal-title').textContent = 'Editar Jogo';
   } else {
-    setup = { emoji:'dice', type:'cartas', scoring:'high', playerCount:2, font:'playfair', wallpaper:'', wpPosX:50, wpPosY:50, wpZoom:100, formulas:[] };
+    setup = { emoji:'dice', type:'cartas', scoring:'high', playerCount:2, font:'playfair', wallpaper:'', wpPosX:50, wpPosY:50, wpZoom:100, formulas:[], teamMode: false };
     document.getElementById('setup-name').value = '';
     document.getElementById('setup-rules').value = '';
     document.getElementById('setup-wallpaper').value = '';
     document.getElementById('setup-modal-title').textContent = 'Novo Jogo';
+    document.querySelectorAll('[data-team]').forEach(el => {
+      el.classList.toggle('selected', el.dataset.team === 'false');
+    });
   }
   applyWallpaperPreview(setup.wallpaper);
   initEmojiGrid();
@@ -523,6 +546,7 @@ function saveGame() {
     wallpaper: setup.wallpaper,
     wpPosX: setup.wpPosX, wpPosY: setup.wpPosY, wpZoom: setup.wpZoom,
     formulas,
+    teamMode: setup.teamMode,
     createdAt: new Date().toISOString()
   };
 
@@ -557,11 +581,13 @@ function renderLibrary() {
           <span class="tag">${TM[g.type]}</span>
           <span>${g.players.length} jogadores</span>
           <span>${g.scoring==='high'?'↑ Maior':'↓ Menor'}</span>
+          ${g.teamMode ? g.teamMode === 'times' ? '<span>👥 Times</span>' : '<span>👥 Duplas</span>' : ''}
           ${g.formulas&&g.formulas.length ? `<span><i class="ph ph-lightning"></i> ${g.formulas.length} regra${g.formulas.length>1?'s':''}</span>` : ''}
         </div>
       </div>
       <div class="game-actions">
         <button class="btn btn-ghost btn-sm" style="padding:6px 9px;" onclick="event.stopPropagation();openSetup('${g.id}')"><i class="ph ph-pencil-simple"></i></button>
+        <button class="btn btn-secondary btn-sm" style="padding:6px 9px;" onclick="event.stopPropagation();duplicateGame('${g.id}')"><i class="ph ph-copy"></i></button>
         <button class="btn btn-danger btn-sm" style="padding:6px 9px;" onclick="event.stopPropagation();deleteGame('${g.id}')"><i class="ph ph-trash"></i></button>
       </div>
     </div>`).join('');
@@ -574,6 +600,28 @@ function deleteGame(id) {
   renderLibrary();
   toast('Jogo excluído');
   cloudDeleteGame(id);
+}
+
+// ═══════════════════════════════════════════════
+// DUPLICAR JOGO
+// ═══════════════════════════════════════════════
+function duplicateGame(id) {
+  const original = state.games.find(g => g.id === id);
+  if (!original) { toast('Jogo não encontrado'); return; }
+  
+  const newGame = {
+    ...original,
+    id: genId(),
+    name: original.name + ' (cópia)',
+    createdAt: new Date().toISOString()
+  };
+  
+  state.games.push(newGame);
+  save();
+  renderLibrary();
+  SFX.confirm();
+  toast('Jogo duplicado!');
+  cloudUpsertGame(newGame);
 }
 
 function startMatch(gid) {
@@ -591,7 +639,8 @@ function startMatch(gid) {
     log: [],
     startedAt: new Date().toISOString(),
     participants: [],
-    isHost: true
+    isHost: true,
+    teamMode: g.teamMode || false
   };
   state.currentMatch.participants.push({
     nickname: profile.nickname || 'Anfitrião',
@@ -600,7 +649,7 @@ function startMatch(gid) {
     slot: 0
   });
   navTo('play');
-  resetTimer(); timerLimit = 0;
+  resetTimer(); timerLimit = 0; timerRunning = false;
   renderPlay();
   save();
 }
@@ -610,12 +659,212 @@ function slotName(m, i) {
   return part ? part.nickname : m.players[i];
 }
 
+function getDisplayName(m, slot) {
+  const part = m.participants.find(p => p.slot === slot);
+  if (part) return part.nickname;
+  if (m.teamMode && m.teams && m.teams[slot]) {
+    return m.teams[slot].name || `Dupla ${slot+1}`;
+  }
+  return m.players[slot] || `Jogador ${slot+1}`;
+}
+
 function getSorted(m) {
-  const arr = m.players.map((name,i) => ({ name: slotName(m, i), score: m.scores[i], idx: i }));
+  const arr = m.players.map((name,i) => ({ name: getDisplayName(m, i), score: m.scores[i], idx: i }));
   arr.sort((a,b) => m.scoring==='high' ? b.score-a.score : a.score-b.score);
   return arr;
 }
 
+// ═══════════════════════════════════════════════
+// FUNÇÕES DE RODADA (CORRIGIDAS)
+// ═══════════════════════════════════════════════
+
+function openRoundSheet() {
+  const m = state.currentMatch;
+  if (!m) return;
+  if (!m.isHost) {
+    toast('Apenas o anfitrião pode finalizar a rodada');
+    return;
+  }
+  SFX.tap();
+
+  const lastRoundIndex = m.rounds.length;
+  const registeredThisRound = m.log 
+    ? m.log.filter(entry => entry.round === undefined || entry.round === lastRoundIndex)
+    : [];
+
+  let statusHTML = m.players.map((_, i) => {
+    const displayName = getDisplayName(m, i);
+    const hasRegistered = registeredThisRound.some(entry => entry.player === i);
+    const currentScore = m.scores[i] || 0;
+    const lastRoundScores = m.rounds.length > 0 
+      ? m.rounds[m.rounds.length - 1].scores 
+      : m.players.map(() => 0);
+    const delta = currentScore - (lastRoundScores[i] || 0);
+    return `
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+        <span style="font-weight:600;">${displayName}</span>
+        <span style="font-family:'JetBrains Mono';font-weight:700;color:${delta !== 0 ? 'var(--primary-dim)' : 'var(--text-3)'};">
+          ${delta > 0 ? '+' : ''}${delta} pts
+          ${hasRegistered ? ' ✅' : ' ⏳'}
+        </span>
+      </div>
+    `;
+  }).join('');
+
+  const container = document.getElementById('rs-players');
+  container.innerHTML = `
+    <div style="padding:8px 0 12px;">
+      <p style="font-size:0.85rem;color:var(--text-2);margin-bottom:12px;">
+        <strong>Rodada ${m.rounds.length + 1}</strong><br>
+        Aguardando todos os jogadores registrarem seus pontos.
+      </p>
+      <div style="background:var(--surface-2);border-radius:8px;padding:8px 12px;margin-bottom:12px;">
+        ${statusHTML}
+      </div>
+      <p style="font-size:0.72rem;color:var(--text-3);">
+        ${m.participants.length} jogadores na sala
+      </p>
+      <p style="font-size:0.65rem;color:var(--text-3);margin-top:4px;">
+        ✅ = já registrou · ⏳ = aguardando
+      </p>
+    </div>
+  `;
+
+  document.querySelectorAll('.rs-stepper, .rs-note, .rs-step-btn, .rs-step-val, .rs-player-row .rs-stepper').forEach(el => el?.remove());
+  
+  const confirmBtn = document.querySelector('.rs-confirm');
+  if (confirmBtn) {
+    confirmBtn.textContent = '🔒 Finalizar rodada';
+  }
+
+  document.getElementById('rs-overlay').classList.add('rs-open');
+  document.getElementById('rs-panel').classList.add('rs-open');
+}
+
+function closeRoundSheet() {
+  document.getElementById('rs-overlay').classList.remove('rs-open');
+  document.getElementById('rs-panel').classList.remove('rs-open');
+}
+
+function confirmRound() {
+  const m = state.currentMatch;
+  if (!m) return;
+  if (!m.isHost) {
+    toast('Apenas o anfitrião pode finalizar a rodada');
+    return;
+  }
+
+  const lastRoundIndex = m.rounds.length;
+  const registeredThisRound = m.log 
+    ? m.log.filter(entry => entry.round === undefined || entry.round === lastRoundIndex)
+    : [];
+
+  const allRegistered = m.players.every((_, i) => 
+    registeredThisRound.some(entry => entry.player === i)
+  );
+
+  if (!allRegistered && !confirm('Nem todos os jogadores registraram. Finalizar mesmo assim?')) {
+    return;
+  }
+
+  const lastRoundScores = m.rounds.length > 0 
+    ? m.rounds[m.rounds.length - 1].scores 
+    : m.players.map(() => 0);
+
+  const deltas = m.scores.map((current, i) => {
+    const last = lastRoundScores[i] || 0;
+    return current - last;
+  });
+
+  m.log = m.log.map(entry => {
+    if (entry.round === undefined) {
+      return { ...entry, round: lastRoundIndex };
+    }
+    return entry;
+  });
+
+  m.rounds.push({ 
+    scores: deltas, 
+    notes: m.players.map(() => ''),
+    timestamp: new Date().toISOString()
+  });
+
+  SFX.score();
+  closeRoundSheet();
+
+  setTimeout(() => { 
+    renderPlay(); 
+    toast(`Rodada ${m.rounds.length} finalizada!`); 
+    save();
+    broadcastState(); 
+  }, 380);
+}
+
+// ═══════════════════════════════════════════════
+// FUNÇÃO applyFormula CORRIGIDA (com broadcast)
+// ═══════════════════════════════════════════════
+function applyFormula(fi) {
+  const m = state.currentMatch;
+  if (!m) return;
+  const f = m.formulas[fi];
+  const playerIdx = window.formulaSelectedPlayer ?? 0;
+  if (playerIdx >= m.players.length) {
+    toast('Jogador inválido');
+    return;
+  }
+
+  const isHost = m.isHost;
+  const myPart = m.participants.find(p => p.nickname === profile.nickname);
+  const mySlot = myPart ? myPart.slot : -1;
+
+  if (!isHost && playerIdx !== mySlot) {
+    toast('Você só pode registrar pontos para você mesmo');
+    return;
+  }
+
+  m.scores[playerIdx] += f.value;
+  if (!m.log) m.log = [];
+  m.log.push({ 
+    player: playerIdx, 
+    label: f.label, 
+    value: f.value, 
+    ts: new Date().toISOString(),
+    appliedBy: profile.nickname || 'Anônimo'
+  });
+
+  const el = document.getElementById(`sv-${playerIdx}`);
+  if (el) {
+    const p = document.createElement('span');
+    p.className = `score-particle ${f.value>=0?'particle-pos':'particle-neg'}`;
+    p.textContent = (f.value>0?'+':'')+f.value;
+    el.appendChild(p);
+    setTimeout(() => p.remove(), 1100);
+  }
+
+  SFX.score();
+  renderPlay();
+  toast(`${f.label}: ${f.value>0?'+':''}${f.value} pts → ${getDisplayName(m, playerIdx)}`);
+
+  if (isHost) {
+    save();
+  } else {
+    roomChannel?.send({
+      type: 'broadcast',
+      event: 'player-score',
+      payload: {
+        playerIdx: playerIdx,
+        value: f.value,
+        label: f.label,
+        appliedBy: profile.nickname || 'Anônimo'
+      }
+    });
+  }
+  broadcastState();
+}
+
+// ═══════════════════════════════════════════════
+// FUNÇÃO renderPlay (completa)
+// ═══════════════════════════════════════════════
 function renderPlay() {
   const m = state.currentMatch;
   const el = document.getElementById('play-content');
@@ -628,20 +877,13 @@ function renderPlay() {
   }
   empty.style.display = 'none';
   el.style.display = 'block';
+
   const sorted = getSorted(m);
   const fontCSS = getFontCSS(m.font);
   const isHost = m.isHost;
   const maxScore = Math.max(...m.scores, 1);
-  const leaderName = sorted.length && m.rounds.length > 0 ? sorted[0].name.split(' ')[0] : '—';
 
-  if (isHost) {
-    roundTrigger.style.display = 'block';
-    document.getElementById('rt-badge').textContent = `R${m.rounds.length+1}`;
-  } else {
-    roundTrigger.style.display = 'none';
-  }
-  document.getElementById('rs-badge').textContent = `R${m.rounds.length+1}`;
-
+  // HERO
   const heroHTML = `
     <div class="play-hero${m.wallpaper ? ' has-wallpaper' : ''}">
       ${m.wallpaper ? `<div class="play-hero-bg" style="background-image:url('${m.wallpaper}');background-position:${m.wpPosX??50}% ${m.wpPosY??50}%;background-size:${(m.wpZoom??100) === 100 ? 'cover' : (m.wpZoom??100)+'%'};"></div>` : ''}
@@ -651,44 +893,23 @@ function renderPlay() {
         <span>${TM[m.type]}</span><span class="dot"></span>
         <span>${m.players.length} jogadores</span><span class="dot"></span>
         <span>${m.scoring==='high'?'↑ Maior':'↓ Menor'}</span>
+        ${m.teamMode ? `<span class="dot"></span><span>${m.teamMode === 'times' ? '👥 Times' : '👥 Duplas'}</span>` : ''}
       </div>
     </div>
   `;
 
-  const timerModeActive = (mode) => (timerLimit === 0 && mode === 'infinite') || (timerLimit === 300 && mode === '5') || (timerLimit === 600 && mode === '10') || (timerLimit > 0 && timerLimit !== 300 && timerLimit !== 600 && mode === 'custom') ? ' active' : '';
+  // TIMER (mantido, com broadcast)
+  const timerHTML = generateTimerHTML(m, isHost);
 
-  const timerHTML = `
-    <div class="timer-hero">
-      <div class="timer-ring-wrap">
-        <svg class="timer-ring-svg" viewBox="0 0 200 200">
-          <circle class="timer-ring-bg" cx="100" cy="100" r="80"/>
-          <circle class="timer-ring-fill${timerLimit > 0 ? '' : ' t-infinite'}" cx="100" cy="100" r="80" id="timer-ring-fill"/>
-        </svg>
-        <div class="timer-center">
-          <div class="timer-big" id="timer-display">00:00</div>
-          <div class="timer-sub" id="timer-remaining">${timerLimit>0 ? 'com limite' : timerInterval ? 'em andamento' : 'pausado'}</div>
-        </div>
-      </div>
-      ${isHost ? `
-      <div class="timer-btns">
-        <button class="t-btn" onclick="resetTimer()" title="Zerar"><i class="ph ph-arrow-counter-clockwise"></i></button>
-        <button class="t-btn t-play" id="t-play-btn" onclick="toggleTimerV2()"><i class="ph ph-${timerInterval ? 'pause' : 'play'}" id="t-play-icon"></i></button>
-        <button class="t-btn" onclick="setTimerLimit()" title="Definir limite"><i class="ph ph-hourglass"></i></button>
-      </div>
-      <div class="timer-modes">
-        <button class="t-mode${timerModeActive('infinite')}" onclick="setTimerModeV2('infinite')"><i class="ph ph-infinity"></i> Livre</button>
-        <button class="t-mode${timerModeActive('5')}" onclick="setTimerModeV2('5')">5 min</button>
-        <button class="t-mode${timerModeActive('10')}" onclick="setTimerModeV2('10')">10 min</button>
-        <button class="t-mode${timerModeActive('custom')}" onclick="setTimerModeV2('custom')"><i class="ph ph-pencil-simple"></i></button>
-      </div>` : `<div style="font-size:0.68rem;color:var(--text-3);margin-top:10px;">O anfitrião controla o cronômetro</div>`}
-    </div>
-  `;
-
+  // PÓDIO
   const podiumHTML = `
     <div class="podium-section">
       <div class="podium-header">
         <span class="podium-label"><i class="ph ph-trophy"></i> Placar</span>
-        <span style="font-family:'JetBrains Mono';font-size:0.65rem;color:var(--text-3);">${m.scoring==='high'?'↑ Maior':'↓ Menor'}</span>
+        <span style="font-family:'JetBrains Mono';font-size:0.65rem;color:var(--text-3);">
+          ${m.scoring==='high'?'↑ Maior':'↓ Menor'}
+          ${m.teamMode ? m.teamMode === 'times' ? ' · Times' : ' · Duplas' : ''}
+        </span>
       </div>
       ${sorted.map((p, rank) => {
         const barW = Math.max(6, (p.score / maxScore) * 100);
@@ -707,26 +928,35 @@ function renderPlay() {
     </div>
   `;
 
+  // REGRAS RÁPIDAS (com chips)
   let smartHTML = '';
   if (m.formulas && m.formulas.length) {
-    let playerChips = '';
-    if (isHost) {
-      if (typeof formulaSelectedPlayer === 'undefined' || formulaSelectedPlayer >= m.players.length) window.formulaSelectedPlayer = 0;
-      playerChips = m.players.map((p, pi) => {
-        const color = AVATAR_COLORS[pi % AVATAR_COLORS.length];
-        return `<button class="p-chip ${pi===formulaSelectedPlayer?'p-sel':''}" onclick="formulaSelectedPlayer=${pi};renderPlay();"><span class="p-dot" style="background:${color};"></span>${slotName(m, pi).split(' ')[0]}</button>`;
-      }).join('');
-    } else {
-      const myPart = m.participants.find(p => p.nickname === profile.nickname);
-      if (myPart) {
-        window.formulaSelectedPlayer = myPart.slot;
-        const color = AVATAR_COLORS[myPart.slot % AVATAR_COLORS.length];
-        playerChips = `<button class="p-chip p-sel"><span class="p-dot" style="background:${color};"></span>${myPart.nickname}</button>`;
-      } else {
-        window.formulaSelectedPlayer = 0;
-        playerChips = `<button class="p-chip p-sel"><span class="p-dot" style="background:${AVATAR_COLORS[0]};"></span>${slotName(m, 0)}</button>`;
-      }
+    const myPart = m.participants.find(p => p.nickname === profile.nickname);
+    const mySlot = myPart ? myPart.slot : -1;
+    if (typeof window.formulaSelectedPlayer === 'undefined' || window.formulaSelectedPlayer >= m.players.length) {
+      window.formulaSelectedPlayer = mySlot >= 0 ? mySlot : 0;
     }
+    if (!isHost && window.formulaSelectedPlayer !== mySlot && mySlot >= 0) {
+      window.formulaSelectedPlayer = mySlot;
+    }
+
+    let playerChips = m.players.map((_, pi) => {
+      const displayName = getDisplayName(m, pi);
+      const part = m.participants.find(pt => pt.slot === pi);
+      const color = part?.avatar ? 'transparent' : AVATAR_COLORS[pi % AVATAR_COLORS.length];
+      const isSelected = pi === window.formulaSelectedPlayer;
+      const canSelect = isHost || pi === mySlot;
+      return `
+        <button class="p-chip ${isSelected ? 'p-sel' : ''}" 
+                onclick="${canSelect ? `window.formulaSelectedPlayer=${pi};renderPlay();` : `toast('Você só pode registrar para você mesmo');`}"
+                ${!canSelect ? 'style="opacity:0.5;"' : ''}>
+          <span class="p-dot" style="background:${color};"></span>
+          ${displayName.split(' ')[0]}
+          ${!canSelect ? ' 🔒' : ''}
+        </button>
+      `;
+    }).join('');
+
     smartHTML = `
       <div class="qscore-section">
         <div class="qscore-header">
@@ -735,29 +965,36 @@ function renderPlay() {
         </div>
         <div class="player-chips">${playerChips}</div>
         <div class="formula-grid">${m.formulas.map((f, fi) =>
-          `<button class="f-btn ${f.value<0?'f-neg':''}" onclick="applyFormula(${fi})"><span class="f-lbl">${f.label}</span><span class="f-val">${f.value>0?'+':''}${f.value}</span></button>`
+          `<button class="f-btn ${f.value<0?'f-neg':''}" onclick="applyFormula(${fi})">
+            <span class="f-lbl">${f.label}</span>
+            <span class="f-val">${f.value>0?'+':''}${f.value}</span>
+          </button>`
         ).join('')}</div>
       </div>`;
   }
 
+  // LOG (com collapsible)
   let logHTML = '';
   if (m.log && m.log.length) {
     logHTML = `
       <div class="log-section-v2">
         <div class="log-card-v2">
-          <div class="log-v2-title"><i class="ph ph-receipt"></i> Registro</div>
-          ${m.log.map((entry, li) => ({entry, li})).reverse().map(({entry, li}) => `
-            <div class="log-v2-entry">
-              <span class="log-v2-info"><strong>${slotName(m, entry.player).split(' ')[0]}</strong> — ${entry.label}</span>
-              <span class="log-v2-val ${entry.value>=0?'lv-pos':'lv-neg'}">
-                ${entry.value>0?'+':''}${entry.value}
-                ${isHost ? `<button class="btn btn-ghost btn-sm" style="padding:1px 5px;font-size:0.7rem;" onclick="removeLogEntry(${li})"><i class="ph ph-x"></i></button>` : ''}
-              </span>
-            </div>`).join('')}
+          <div class="log-v2-title"><i class="ph ph-receipt"></i> Registro <span style="font-weight:400;font-size:0.6rem;color:var(--text-3);">(clique para expandir)</span></div>
+          <div style="max-height:80px;overflow-y:auto;" onclick="this.style.maxHeight=this.style.maxHeight==='80px'?'500px':'80px';this.style.cursor='pointer';">
+            ${m.log.map((entry, li) => `
+              <div class="log-v2-entry">
+                <span class="log-v2-info"><strong>${getDisplayName(m, entry.player).split(' ')[0]}</strong> — ${entry.label}</span>
+                <span class="log-v2-val ${entry.value>=0?'lv-pos':'lv-neg'}">
+                  ${entry.value>0?'+':''}${entry.value}
+                  ${isHost ? `<button class="btn btn-ghost btn-sm" style="padding:1px 5px;font-size:0.7rem;" onclick="removeLogEntry(${li})"><i class="ph ph-x"></i></button>` : ''}
+                </span>
+              </div>`).join('')}
+          </div>
         </div>
       </div>`;
   }
 
+  // RODADAS ANTERIORES (collapsible)
   let roundsHTML = '';
   if (m.rounds.length > 0) {
     roundsHTML = `
@@ -767,20 +1004,25 @@ function renderPlay() {
           <i class="ph ph-caret-down"></i>
         </button>
         <div class="rounds-body">
-          ${m.rounds.map((r,ri) => `
-            <div class="history-round" style="flex-direction:column;align-items:stretch;gap:3px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;">
-                <span class="history-round-label">R${ri+1}</span>
-                <div class="history-round-scores">${r.scores.map((s,pi) =>
-                  `<span class="h-score ${s>0?'pos':s<0?'neg':'zero'}">${slotName(m, pi).split(' ')[0]}: ${s>0?'+':''}${s}</span>`
-                ).join('')}</div>
-              </div>
-              ${r.notes && r.notes.some(n=>n) ? `<div style="padding-left:28px;font-size:0.66rem;color:var(--text-3);line-height:1.4;">${r.notes.map((n,pi) => n ? `<div><span style="color:var(--text-2);font-weight:600;">${slotName(m, pi).split(' ')[0]}:</span> ${n}</div>` : '').join('')}</div>` : ''}
-            </div>`).join('')}
+          ${m.rounds.map((r,ri) => {
+            const scores = Array.isArray(r) ? r : r.scores;
+            const notes = Array.isArray(r) ? [] : (r.notes || []);
+            return `
+              <div class="history-round" style="flex-direction:column;align-items:stretch;gap:3px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                  <span class="history-round-label">R${ri+1}</span>
+                  <div class="history-round-scores">${scores.map((s,pi) =>
+                    `<span class="h-score ${s>0?'pos':s<0?'neg':'zero'}">${getDisplayName(m, pi).split(' ')[0]}: ${s>0?'+':''}${s}</span>`
+                  ).join('')}</div>
+                </div>
+                ${notes && notes.some(n=>n) ? `<div style="padding-left:28px;font-size:0.66rem;color:var(--text-3);line-height:1.4;">${notes.map((n,pi) => n ? `<div><span style="color:var(--text-2);font-weight:600;">${getDisplayName(m, pi).split(' ')[0]}:</span> ${n}</div>` : '').join('')}</div>` : ''}
+              </div>`;
+          }).join('')}
         </div>
       </div>`;
   }
 
+  // ACTION BAR
   const actionHTML = `
     <div class="game-actions-v2">
       ${m.rules||m.formulas?.length ? `<button class="ga-btn" onclick="showRules()"><i class="ph ph-scroll"></i> Regras</button>` : ''}
@@ -790,6 +1032,7 @@ function renderPlay() {
     </div>
   `;
 
+  // CONVIDADO: formulário inline
   let guestRoundHTML = '';
   if (!isHost) {
     const myPart = m.participants.find(p => p.nickname === profile.nickname);
@@ -810,258 +1053,170 @@ function renderPlay() {
     `;
   }
 
+  // MONTA O HTML FINAL
   el.innerHTML = heroHTML + timerHTML + podiumHTML + smartHTML + logHTML + guestRoundHTML + roundsHTML + actionHTML;
   updateTimerDisplay();
 }
 
-window.formulaSelectedPlayer = 0;
+// ═══════════════════════════════════════════════
+// TIMER COM BROADCAST
+// ═══════════════════════════════════════════════
+let timerInterval = null;
+let timerSeconds = 0;
+let timerLimit = 0;
+let timerRunning = false;
 
-function applyFormula(fi) {
-  const m = state.currentMatch;
-  if (!m) return;
-  const f = m.formulas[fi];
-  const playerIdx = window.formulaSelectedPlayer ?? 0;
-  const isHost = m.isHost;
-  if (!isHost) {
-    const myPart = m.participants.find(p => p.nickname === profile.nickname);
-    if (!myPart || myPart.slot !== playerIdx) {
-      toast('Você só pode aplicar regras para você mesmo');
-      return;
+function generateTimerHTML(m, isHost) {
+  const timerModeActive = (mode) => (timerLimit === 0 && mode === 'infinite') || (timerLimit === 300 && mode === '5') || (timerLimit === 600 && mode === '10') || (timerLimit > 0 && timerLimit !== 300 && timerLimit !== 600 && mode === 'custom') ? ' active' : '';
+  return `
+    <div class="timer-hero">
+      <div class="timer-ring-wrap">
+        <svg class="timer-ring-svg" viewBox="0 0 200 200">
+          <circle class="timer-ring-bg" cx="100" cy="100" r="80"/>
+          <circle class="timer-ring-fill${timerLimit > 0 ? '' : ' t-infinite'}" cx="100" cy="100" r="80" id="timer-ring-fill"/>
+        </svg>
+        <div class="timer-center">
+          <div class="timer-big" id="timer-display">00:00</div>
+          <div class="timer-sub" id="timer-remaining">${timerLimit>0 ? 'com limite' : timerRunning ? 'em andamento' : 'pausado'}</div>
+        </div>
+      </div>
+      ${isHost ? `
+      <div class="timer-btns">
+        <button class="t-btn" onclick="resetTimer()" title="Zerar"><i class="ph ph-arrow-counter-clockwise"></i></button>
+        <button class="t-btn t-play" id="t-play-btn" onclick="toggleTimerV2()"><i class="ph ph-${timerRunning ? 'pause' : 'play'}" id="t-play-icon"></i></button>
+        <button class="t-btn" onclick="setTimerLimit()" title="Definir limite"><i class="ph ph-hourglass"></i></button>
+      </div>
+      <div class="timer-modes">
+        <button class="t-mode${timerModeActive('infinite')}" onclick="setTimerModeV2('infinite')"><i class="ph ph-infinity"></i> Livre</button>
+        <button class="t-mode${timerModeActive('5')}" onclick="setTimerModeV2('5')">5 min</button>
+        <button class="t-mode${timerModeActive('10')}" onclick="setTimerModeV2('10')">10 min</button>
+        <button class="t-mode${timerModeActive('custom')}" onclick="setTimerModeV2('custom')"><i class="ph ph-pencil-simple"></i></button>
+      </div>` : `<div style="font-size:0.68rem;color:var(--text-3);margin-top:10px;">O anfitrião controla o cronômetro</div>`}
+    </div>
+  `;
+}
+
+function toggleTimerV2() {
+  if (timerRunning) {
+    pauseTimer();
+  } else {
+    startTimer();
+  }
+  const icon = document.getElementById('t-play-icon');
+  if (icon) icon.className = timerRunning ? 'ph ph-pause' : 'ph ph-play';
+}
+
+function setTimerModeV2(mode) {
+  if (mode === 'infinite') { timerLimit = 0; }
+  else if (mode === '5') { timerLimit = 300; }
+  else if (mode === '10') { timerLimit = 600; }
+  else if (mode === 'custom') {
+    const v = prompt('Tempo limite em minutos (0 = sem limite):');
+    if (v === null) return;
+    const mins = parseInt(v);
+    if (isNaN(mins) || mins < 0) return;
+    timerLimit = mins * 60;
+  }
+  timerSeconds = 0;
+  timerRunning = false;
+  updateTimerDisplay();
+  renderPlay();
+  broadcastTimerState();
+  toast(timerLimit > 0 ? `Limite: ${Math.floor(timerLimit/60)} min` : 'Modo livre');
+}
+
+function startTimer() {
+  if (timerRunning) return;
+  timerRunning = true;
+  timerInterval = setInterval(() => {
+    timerSeconds++;
+    updateTimerDisplay();
+    if (timerLimit > 0 && timerSeconds >= timerLimit) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      timerRunning = false;
+      SFX.win();
+      toast('Tempo esgotado!');
+    }
+    broadcastTimerState();
+  }, 1000);
+  broadcastTimerState();
+}
+
+function pauseTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+  timerRunning = false;
+  broadcastTimerState();
+}
+
+function resetTimer() {
+  pauseTimer();
+  timerSeconds = 0;
+  updateTimerDisplay();
+  broadcastTimerState();
+}
+
+function broadcastTimerState() {
+  if (!state.currentMatch?.roomCode || !roomChannel) return;
+  roomChannel.send({
+    type: 'broadcast',
+    event: 'timer-sync',
+    payload: {
+      seconds: timerSeconds,
+      limit: timerLimit,
+      running: timerRunning
+    }
+  });
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById('timer-display');
+  if (!el) return;
+  const h = Math.floor(timerSeconds / 3600);
+  const m = Math.floor((timerSeconds % 3600) / 60);
+  const s = timerSeconds % 60;
+  el.textContent = h > 0
+    ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+    : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+  const ring = document.getElementById('timer-ring-fill');
+  const circumference = 2 * Math.PI * 80;
+  const labelEl = document.getElementById('timer-remaining');
+
+  if (ring) {
+    if (timerLimit > 0) {
+      const pct = Math.min(timerSeconds / timerLimit, 1);
+      ring.style.strokeDasharray = circumference;
+      ring.style.strokeDashoffset = circumference * (1 - pct);
+      ring.classList.remove('t-infinite');
+      ring.classList.toggle('t-warning', pct > 0.8);
+      if (labelEl) {
+        const remaining = Math.max(0, timerLimit - timerSeconds);
+        const rm = Math.floor(remaining / 60);
+        const rs = remaining % 60;
+        labelEl.textContent = remaining <= 0 ? 'tempo esgotado!' : `resta ${rm}:${String(rs).padStart(2,'0')}`;
+      }
+    } else {
+      const cycle = (timerSeconds % 60) / 60;
+      ring.style.strokeDasharray = circumference;
+      ring.style.strokeDashoffset = circumference * (1 - cycle);
+      ring.classList.add('t-infinite');
+      ring.classList.remove('t-warning');
+      if (labelEl) labelEl.textContent = timerRunning ? 'em andamento' : 'pausado';
     }
   }
-  m.scores[playerIdx] += f.value;
-  if (!m.log) m.log = [];
-  m.log.push({ player: playerIdx, label: f.label, value: f.value, ts: new Date().toISOString() });
-  const el = document.getElementById(`sv-${playerIdx}`);
-  if (el) {
-    const p = document.createElement('span');
-    p.className = `score-particle ${f.value>=0?'particle-pos':'particle-neg'}`;
-    p.textContent = (f.value>0?'+':'')+f.value;
-    el.appendChild(p);
-    setTimeout(() => p.remove(), 1100);
-  }
-  SFX.score();
-  renderPlay();
-  toast(`${f.label}: ${f.value>0?'+':''}${f.value} pts → ${slotName(m, playerIdx).split(' ')[0]}`);
-  broadcastState();
-  save();
 }
 
-function removeLogEntry(li) {
-  const m = state.currentMatch;
-  if (!m || !m.log || !m.log[li]) return;
-  const entry = m.log[li];
-  m.scores[entry.player] -= entry.value;
-  m.log.splice(li, 1);
-  SFX.remove();
-  renderPlay();
-  broadcastState();
-  save();
-}
-
-function confirmRound() {
-  const m = state.currentMatch;
-  if (!m) return;
-  const scores = m.players.map((_,i) => parseInt((document.getElementById(`si-${i}`) || document.getElementById(`ri-${i}`))?.value)||0);
-  const notes = m.players.map((_,i) => (document.getElementById(`sn-${i}`) || document.getElementById(`rn-${i}`))?.value?.trim()||'');
-  m.rounds.push({ scores, notes });
-  scores.forEach((s,i) => m.scores[i] += s);
-  SFX.score();
-  closeRoundSheet();
-  setTimeout(() => { renderPlay(); toast(`Rodada ${m.rounds.length} confirmada`); broadcastState(); save(); }, 380);
-}
-
-function endMatch() {
-  const m = state.currentMatch;
-  if (!m) return;
-  if (!m.isHost) { toast('Apenas o anfitrião pode encerrar a partida'); return; }
-  const hasActivity = m.rounds.length > 0 || (m.log && m.log.length > 0);
-  if (!hasActivity && !confirm('Nenhuma rodada registrada. Encerrar assim mesmo?')) return;
-  const sorted = getSorted(m);
-  const match = {
-    id: genId(), gameId: m.gameId, gameName: m.gameName, emoji: m.emoji,
-    type: m.type, scoring: m.scoring, players: [...m.players],
-    rounds: [...m.rounds], finalScores: [...m.scores], winner: sorted[0],
-    startedAt: m.startedAt, endedAt: new Date().toISOString(),
-    rules: m.rules, formulas: m.formulas||[], log: m.log||[],
-    font: m.font, wallpaper: m.wallpaper
-  };
-  state.matches.unshift(match);
-  const wasInRoom = !!m.roomCode;
-  if (wasInRoom) { m.ended = true; broadcastState(); }
-  if (roomChannel) { sb?.removeChannel(roomChannel); roomChannel = null; }
-  state.currentMatch = null;
-  save();
-  cloudUpsertMatch(match);
-  if (hasActivity) { SFX.win(); spawnConfetti(); showWinner(match); }
-  else { navTo('history'); renderPlay(); renderHistory(); }
-}
-
-function showWinner(match) {
-  const el = document.getElementById('play-content');
-  const sorted = match.players.map((n,i) => ({ name:n, score:match.finalScores[i] }));
-  sorted.sort((a,b) => match.scoring==='high' ? b.score-a.score : a.score-b.score);
-  const fontCSS = getFontCSS(match.font);
-  el.innerHTML = `
-    <div class="winner-screen">
-      <span class="winner-trophy"><i class="ph ph-trophy" style="font-size:4rem;"></i></span>
-      <div class="winner-eyebrow">Vencedor</div>
-      <div class="winner-name" style="font-family:${fontCSS}">${match.winner.name}</div>
-      <div class="winner-pts">${match.winner.score} pts</div>
-    </div>
-    <div class="card">
-      <div class="card-title">📊 Resultado Final</div>
-      ${sorted.map((p,i) => `
-        <div class="score-row ${i===0?'leader':''}">
-          <span class="score-rank">${i===0?'<i class="ph ph-crown"></i>':i+1}</span>
-          <span class="score-name">${p.name}</span>
-          <span class="score-total">${p.score}</span>
-        </div>`).join('')}
-    </div>
-    <div class="action-bar" style="justify-content:center;">
-      <button class="btn btn-ghost btn-round" onclick="navTo('library');renderPlay();">← Jogos</button>
-      <button class="btn btn-primary btn-round" onclick="navTo('history');renderHistory();renderPlay();">Histórico →</button>
-    </div>`;
-}
-
-function showRules() {
-  const m = state.currentMatch;
-  if (!m) return;
-  const fd = document.getElementById('rules-formula-display');
-  if (m.formulas && m.formulas.length) {
-    fd.innerHTML = `
-      <div class="card" style="margin-bottom:12px;border-color:var(--secondary);">
-        <div class="card-title"><i class="ph ph-lightning"></i> Regras de pontuação</div>
-        ${m.formulas.map(f => `
-          <div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--border);">
-            <span style="font-size:0.85rem;color:var(--text-2);">${f.label}</span>
-            <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${f.value>=0?'var(--secondary)':'var(--accent)'};">${f.value>0?'+':''}${f.value}</span>
-          </div>`).join('')}
-      </div>`;
-  } else {
-    fd.innerHTML = '';
-  }
-  const rc = document.getElementById('rules-modal-content');
-  rc.textContent = m.rules || '';
-  rc.style.display = m.rules ? '' : 'none';
-  document.getElementById('rules-modal').classList.add('active');
-}
-function closeRulesModal() { document.getElementById('rules-modal').classList.remove('active'); }
-
-function renderHistory() {
-  const list = document.getElementById('history-list');
-  const empty = document.getElementById('empty-history');
-  if (!state.matches.length) { list.innerHTML = ''; empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
-  list.innerHTML = state.matches.map(m => {
-    const dt = new Date(m.endedAt).toLocaleDateString('pt-BR', {
-      day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'
-    });
-    const sorted = m.players.map((n,i) => ({ name:n, score:m.finalScores[i] }));
-    sorted.sort((a,b) => m.scoring==='high' ? b.score-a.score : a.score-b.score);
-    const fontCSS = getFontCSS(m.font||'playfair');
-    return `
-      <div class="match-card" onclick="showDetail('${m.id}')">
-        <div class="match-top">
-          <div class="match-icon">${getIconSVG(m.emoji, 22)}</div>
-          <div class="match-info">
-            <div class="match-name" style="font-family:${fontCSS}">${m.gameName}</div>
-            <div class="match-date">${dt} · ${m.rounds.length} rodadas</div>
-          </div>
-        </div>
-        <div class="match-podium">${sorted.map((p,i) =>
-          `<span class="podium-chip">${i===0?'<i class="ph ph-crown"></i> ':''}${p.name.split(' ')[0]} <span class="p-score">${p.score}</span></span>`
-        ).join('')}</div>
-        <div class="match-footer">
-          <button class="btn btn-ghost btn-sm btn-round" style="flex:1;" onclick="event.stopPropagation();replay('${m.id}')"><i class="ph ph-arrow-counter-clockwise"></i> Jogar de novo</button>
-          <button class="btn btn-danger btn-sm btn-round" style="flex-shrink:0;" onclick="event.stopPropagation();delMatch('${m.id}')"><i class="ph ph-trash"></i> Excluir</button>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-function showDetail(id) {
-  const m = state.matches.find(x => x.id === id);
-  if (!m) return;
-  SFX.tap();
-  const sorted = m.players.map((n,i) => ({ name:n, score:m.finalScores[i] }));
-  sorted.sort((a,b) => m.scoring==='high' ? b.score-a.score : a.score-b.score);
-  const fontCSS = getFontCSS(m.font||'playfair');
-  document.getElementById('detail-content').innerHTML = `
-    <div style="text-align:center;margin-bottom:20px;">
-      <div style="font-size:2.5rem;margin-bottom:6px;">${getIconSVG(m.emoji, 42)}</div>
-      <div style="font-family:${fontCSS};font-size:1.35rem;font-weight:800;color:var(--text);">${m.gameName}</div>
-      <div style="font-size:0.7rem;color:var(--text-3);margin-top:4px;">${new Date(m.endedAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})} · ${m.rounds.length} rodadas</div>
-    </div>
-    <div class="card">
-      <div class="card-title"><i class="ph ph-trophy"></i> Classificação</div>
-      ${sorted.map((p,i) => `
-        <div class="score-row ${i===0?'leader':''}" style="margin-bottom:5px;">
-          <span class="score-rank">${i===0?'<i class="ph ph-crown"></i>':i+1}</span>
-          <span class="score-name">${p.name}</span>
-          <span class="score-total">${p.score}</span>
-        </div>`).join('')}
-    </div>
-    ${m.rounds.length>0 ? `
-      <div class="card">
-        <div class="card-title"><i class="ph ph-list-bullets"></i> Rodadas</div>
-        ${m.rounds.map((r,ri) => {
-          const scores = Array.isArray(r) ? r : r.scores;
-          const notes = Array.isArray(r) ? null : r.notes;
-          return `
-          <div class="history-round" style="flex-direction:column;align-items:stretch;gap:3px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;">
-              <span class="history-round-label">R${ri+1}</span>
-              <div class="history-round-scores">${scores.map((s,pi) =>
-                `<span class="h-score ${s>0?'pos':s<0?'neg':'zero'}">${m.players[pi].split(' ')[0]}: ${s>0?'+':''}${s}</span>`
-              ).join('')}</div>
-            </div>
-            ${notes && notes.some(n=>n) ? `<div style="padding-left:30px;font-size:0.68rem;color:var(--text-3);line-height:1.5;">${notes.map((n,pi) => n ? `<div><span style="color:var(--text-2);font-weight:600;">${m.players[pi].split(' ')[0]}:</span> ${n}</div>` : '').join('')}</div>` : ''}
-          </div>`;
-        }).join('')}
-      </div>` : ''}
-    ${m.log&&m.log.length ? `
-      <div class="card" style="border-color:var(--secondary);">
-        <div class="card-title"><i class="ph ph-receipt"></i> De onde veio cada ponto</div>
-        ${m.log.map(entry => `
-          <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
-            <span style="color:var(--text-2);"><strong style="color:var(--text);">${m.players[entry.player].split(' ')[0]}</strong> — ${entry.label}</span>
-            <span style="font-family:'JetBrains Mono',monospace;color:${entry.value>=0?'var(--secondary)':'var(--accent)'};">${entry.value>0?'+':''}${entry.value}</span>
-          </div>`).join('')}
-      </div>` : ''}
-    ${m.formulas&&m.formulas.length ? `
-      <div class="card">
-        <div class="card-title"><i class="ph ph-lightning"></i> Regras cadastradas neste jogo</div>
-        ${m.formulas.map(f => `
-          <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
-            <span style="color:var(--text-2);">${f.label}</span>
-            <span style="font-family:'JetBrains Mono',monospace;color:${f.value>=0?'var(--secondary)':'var(--accent)'};">${f.value>0?'+':''}${f.value}</span>
-          </div>`).join('')}
-      </div>` : ''}
-    ${m.rules ? `
-      <div class="card">
-        <div class="card-title"><i class="ph ph-scroll"></i> Regras</div>
-        <div class="rules-box">${m.rules}</div>
-      </div>` : ''}
-    <button class="btn btn-danger btn-block btn-round mt-12" onclick="if(delMatch('${m.id}'))closeDetail();"><i class="ph ph-trash"></i> Excluir partida</button>`;
-  document.getElementById('detail-modal').classList.add('active');
-}
-
-function closeDetail() { document.getElementById('detail-modal').classList.remove('active'); }
-function delMatch(id) {
-  SFX.remove();
-  state.matches = state.matches.filter(m => m.id !== id);
-  save(); renderHistory();
-  toast('Partida excluída');
-  cloudDeleteMatch(id);
-  return true;
-}
-function replay(id) {
-  const m = state.matches.find(x => x.id === id);
-  if (!m) return;
-  const g = state.games.find(x => x.id === m.gameId);
-  if (g) startMatch(g.id);
-  else toast('Jogo não encontrado');
+function setTimerLimit() {
+  const mins = parseInt(prompt('Tempo limite em minutos (0 = sem limite):'));
+  if (isNaN(mins) || mins < 0) return;
+  timerLimit = mins * 60;
+  timerSeconds = 0;
+  timerRunning = false;
+  updateTimerDisplay();
+  broadcastTimerState();
+  toast(mins > 0 ? `Limite: ${mins} minutos` : 'Sem limite de tempo');
 }
 
 // ═══════════════════════════════════════════════
@@ -1220,8 +1375,55 @@ function subscribeRoom(code, isHost) {
     }
   });
 
+  roomChannel.on('broadcast', { event: 'timer-sync' }, ({ payload }) => {
+    if (!state.currentMatch?.isHost) {
+      timerSeconds = payload.seconds;
+      timerLimit = payload.limit;
+      timerRunning = payload.running;
+      updateTimerDisplay();
+      if (payload.running && !timerInterval) {
+        timerRunning = true;
+        timerInterval = setInterval(() => {
+          timerSeconds++;
+          updateTimerDisplay();
+          if (timerLimit > 0 && timerSeconds >= timerLimit) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            timerRunning = false;
+            toast('Tempo esgotado!');
+          }
+        }, 1000);
+      } else if (!payload.running && timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        timerRunning = false;
+      }
+    }
+  });
+
   roomChannel.on('broadcast', { event: 'request-sync' }, () => {
     if (isHost) broadcastState();
+  });
+
+  // Player-score para convidados
+  roomChannel.on('broadcast', { event: 'player-score' }, ({ payload }) => {
+    if (state.currentMatch && state.currentMatch.isHost) {
+      const m = state.currentMatch;
+      const { playerIdx, value, label, appliedBy } = payload;
+      m.scores[playerIdx] += value;
+      if (!m.log) m.log = [];
+      m.log.push({
+        player: playerIdx,
+        label: label,
+        value: value,
+        ts: new Date().toISOString(),
+        appliedBy: appliedBy || 'Convidado'
+      });
+      save();
+      renderPlay();
+      broadcastState();
+      toast(`${appliedBy} aplicou ${label}: ${value > 0 ? '+' : ''}${value} pts`);
+    }
   });
 
   roomChannel.subscribe();
@@ -1382,7 +1584,7 @@ function joinRoom(code) {
 })();
 
 // ═══════════════════════════════════════════════
-// PERFIL (com sincronização com o Supabase)
+// PERFIL
 // ═══════════════════════════════════════════════
 let profile = { nickname: '', avatar: '' };
 
@@ -1534,7 +1736,7 @@ function stopMusic() {
 }
 
 // ═══════════════════════════════════════════════
-// SUPABASE — CREDENCIAIS HARDCODED (SEGURAS POIS SÃO ANON)
+// SUPABASE (CREDENCIAIS HARDCODED - MAS PODE USAR .env DEPOIS)
 // ═══════════════════════════════════════════════
 const SUPABASE_URL = 'https://obnxqnllrrkoznxxnwkh.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ibnhxbmxscnJrb3pueHhud2toIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzIwMzIsImV4cCI6MjA5OTU0ODAzMn0.Yy94y6YVXnHYMbunney-hCCp5NbYtNTozaLKuCnXUrQ';
@@ -1544,7 +1746,7 @@ try {
   const mod = window.supabase;
   if (mod && mod.createClient) {
     sb = mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('✅ Supabase client initialized with hardcoded credentials.');
+    console.log('✅ Supabase client initialized.');
   } else {
     console.warn('⚠️ Supabase library not found on window.supabase');
   }
@@ -1565,6 +1767,7 @@ function gameToRow(g, uid) {
     formulas: g.formulas || [], font: g.font || 'playfair',
     wallpaper: (g.wallpaper && g.wallpaper !== '(arquivo local)') ? g.wallpaper : '',
     wp_pos_x: g.wpPosX ?? 50, wp_pos_y: g.wpPosY ?? 50, wp_zoom: g.wpZoom ?? 100,
+    team_mode: g.teamMode || false,
     created_at: g.createdAt || new Date().toISOString()
   };
 }
@@ -1574,6 +1777,7 @@ function rowToGame(r) {
     players: r.players || [], rules: r.rules || '', formulas: r.formulas || [],
     font: r.font || 'playfair', wallpaper: r.wallpaper || '',
     wpPosX: r.wp_pos_x ?? 50, wpPosY: r.wp_pos_y ?? 50, wpZoom: r.wp_zoom ?? 100,
+    teamMode: r.team_mode || false,
     createdAt: r.created_at
   };
 }
@@ -1584,6 +1788,7 @@ function matchToRow(m, uid) {
     final_scores: m.finalScores || [], winner: m.winner || null,
     rules: m.rules || '', formulas: m.formulas || [], log: m.log || [],
     font: m.font || 'playfair', wallpaper: m.wallpaper || '',
+    team_mode: m.teamMode || false,
     started_at: m.startedAt, ended_at: m.endedAt
   };
 }
@@ -1594,6 +1799,7 @@ function rowToMatch(r) {
     rounds: r.rounds || [], finalScores: r.final_scores || [], winner: r.winner || null,
     rules: r.rules || '', formulas: r.formulas || [], log: r.log || [],
     font: r.font || 'playfair', wallpaper: r.wallpaper || '',
+    teamMode: r.team_mode || false,
     startedAt: r.started_at, endedAt: r.ended_at
   };
 }
@@ -1823,151 +2029,220 @@ function clearAllData() {
 }
 
 // ═══════════════════════════════════════════════
-// ROUND BOTTOM SHEET
+// FUNÇÕES DE HISTÓRICO (endMatch, showWinner, etc.)
 // ═══════════════════════════════════════════════
-function openRoundSheet() {
+function endMatch() {
   const m = state.currentMatch;
   if (!m) return;
-  SFX.tap();
-  const container = document.getElementById('rs-players');
-  container.innerHTML = m.players.map((name, i) => {
-    const part = m.participants.find(p => p.slot === i);
-    const bgColor = (part && part.avatar) ? 'transparent' : AVATAR_COLORS[i % AVATAR_COLORS.length];
-    const avContent = (part && part.avatar) ? avatarHTML(part.avatar) : `<span style="font-weight:700;font-size:0.72rem;color:#fff;">${(part ? part.nickname : name)[0]}</span>`;
-    const displayName = part ? part.nickname : name;
-    return `
-      <div class="rs-player-row">
-        <div class="rs-player-avatar" style="background:${bgColor};">${avContent}</div>
-        <div class="rs-player-info">
-          <div class="rs-player-name">${displayName}</div>
-          <div class="rs-player-cur">atual: ${m.scores[i]} pts</div>
-        </div>
-        <div class="rs-stepper">
-          <button class="rs-step-btn" onclick="stepSheetScore(${i},-1)">−</button>
-          <input type="number" class="rs-step-val" id="si-${i}" value="0" inputmode="numeric" onfocus="this.select()">
-          <button class="rs-step-btn" onclick="stepSheetScore(${i},1)">＋</button>
-        </div>
-      </div>
-      <input type="text" class="rs-note" placeholder="Anotação..." id="sn-${i}">`;
-  }).join('');
-  document.getElementById('rs-overlay').classList.add('rs-open');
-  document.getElementById('rs-panel').classList.add('rs-open');
+  if (!m.isHost) { toast('Apenas o anfitrião pode encerrar a partida'); return; }
+  const hasActivity = m.rounds.length > 0 || (m.log && m.log.length > 0);
+  if (!hasActivity && !confirm('Nenhuma rodada registrada. Encerrar assim mesmo?')) return;
+  const sorted = getSorted(m);
+  const match = {
+    id: genId(), gameId: m.gameId, gameName: m.gameName, emoji: m.emoji,
+    type: m.type, scoring: m.scoring, players: [...m.players],
+    rounds: [...m.rounds], finalScores: [...m.scores], winner: sorted[0],
+    startedAt: m.startedAt, endedAt: new Date().toISOString(),
+    rules: m.rules, formulas: m.formulas||[], log: m.log||[],
+    font: m.font, wallpaper: m.wallpaper,
+    teamMode: m.teamMode || false
+  };
+  state.matches.unshift(match);
+  const wasInRoom = !!m.roomCode;
+  if (wasInRoom) { m.ended = true; broadcastState(); }
+  if (roomChannel) { sb?.removeChannel(roomChannel); roomChannel = null; }
+  state.currentMatch = null;
+  save();
+  cloudUpsertMatch(match);
+  if (hasActivity) { SFX.win(); spawnConfetti(); showWinner(match); }
+  else { navTo('history'); renderPlay(); renderHistory(); }
 }
 
-function closeRoundSheet() {
-  document.getElementById('rs-overlay').classList.remove('rs-open');
-  document.getElementById('rs-panel').classList.remove('rs-open');
+function showWinner(match) {
+  const el = document.getElementById('play-content');
+  const sorted = match.players.map((n,i) => ({ name: getDisplayName(match, i), score: match.finalScores[i] }));
+  sorted.sort((a,b) => match.scoring==='high' ? b.score-a.score : a.score-b.score);
+  const fontCSS = getFontCSS(match.font);
+  el.innerHTML = `
+    <div class="winner-screen">
+      <span class="winner-trophy"><i class="ph ph-trophy" style="font-size:4rem;"></i></span>
+      <div class="winner-eyebrow">Vencedor</div>
+      <div class="winner-name" style="font-family:${fontCSS}">${sorted[0].name}</div>
+      <div class="winner-pts">${sorted[0].score} pts</div>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 Resultado Final</div>
+      ${sorted.map((p,i) => `
+        <div class="score-row ${i===0?'leader':''}">
+          <span class="score-rank">${i===0?'<i class="ph ph-crown"></i>':i+1}</span>
+          <span class="score-name">${p.name}</span>
+          <span class="score-total">${p.score}</span>
+        </div>`).join('')}
+    </div>
+    <div class="action-bar" style="justify-content:center;">
+      <button class="btn btn-ghost btn-round" onclick="navTo('library');renderPlay();">← Jogos</button>
+      <button class="btn btn-primary btn-round" onclick="navTo('history');renderHistory();renderPlay();">Histórico →</button>
+    </div>`;
+}
+
+function showRules() {
+  const m = state.currentMatch;
+  if (!m) return;
+  const fd = document.getElementById('rules-formula-display');
+  if (m.formulas && m.formulas.length) {
+    fd.innerHTML = `
+      <div class="card" style="margin-bottom:12px;border-color:var(--secondary);">
+        <div class="card-title"><i class="ph ph-lightning"></i> Regras de pontuação</div>
+        ${m.formulas.map(f => `
+          <div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--border);">
+            <span style="font-size:0.85rem;color:var(--text-2);">${f.label}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${f.value>=0?'var(--secondary)':'var(--accent)'};">${f.value>0?'+':''}${f.value}</span>
+          </div>`).join('')}
+      </div>`;
+  } else {
+    fd.innerHTML = '';
+  }
+  const rc = document.getElementById('rules-modal-content');
+  rc.textContent = m.rules || '';
+  rc.style.display = m.rules ? '' : 'none';
+  document.getElementById('rules-modal').classList.add('active');
+}
+function closeRulesModal() { document.getElementById('rules-modal').classList.remove('active'); }
+
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  const empty = document.getElementById('empty-history');
+  if (!state.matches.length) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  list.innerHTML = state.matches.map(m => {
+    const dt = new Date(m.endedAt).toLocaleDateString('pt-BR', {
+      day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'
+    });
+    const sorted = m.players.map((n,i) => ({ name: getDisplayName(m, i), score: m.finalScores[i] }));
+    sorted.sort((a,b) => m.scoring==='high' ? b.score-a.score : a.score-b.score);
+    const fontCSS = getFontCSS(m.font||'playfair');
+    return `
+      <div class="match-card" onclick="showDetail('${m.id}')">
+        <div class="match-top">
+          <div class="match-icon">${getIconSVG(m.emoji, 22)}</div>
+          <div class="match-info">
+            <div class="match-name" style="font-family:${fontCSS}">${m.gameName}</div>
+            <div class="match-date">${dt} · ${m.rounds.length} rodadas</div>
+          </div>
+        </div>
+        <div class="match-podium">${sorted.map((p,i) =>
+          `<span class="podium-chip">${i===0?'<i class="ph ph-crown"></i> ':''}${p.name.split(' ')[0]} <span class="p-score">${p.score}</span></span>`
+        ).join('')}</div>
+        <div class="match-footer">
+          <button class="btn btn-ghost btn-sm btn-round" style="flex:1;" onclick="event.stopPropagation();replay('${m.id}')"><i class="ph ph-arrow-counter-clockwise"></i> Jogar de novo</button>
+          <button class="btn btn-danger btn-sm btn-round" style="flex-shrink:0;" onclick="event.stopPropagation();delMatch('${m.id}')"><i class="ph ph-trash"></i> Excluir</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function showDetail(id) {
+  const m = state.matches.find(x => x.id === id);
+  if (!m) return;
+  SFX.tap();
+  const sorted = m.players.map((n,i) => ({ name: getDisplayName(m, i), score: m.finalScores[i] }));
+  sorted.sort((a,b) => m.scoring==='high' ? b.score-a.score : a.score-b.score);
+  const fontCSS = getFontCSS(m.font||'playfair');
+  document.getElementById('detail-content').innerHTML = `
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:2.5rem;margin-bottom:6px;">${getIconSVG(m.emoji, 42)}</div>
+      <div style="font-family:${fontCSS};font-size:1.35rem;font-weight:800;color:var(--text);">${m.gameName}</div>
+      <div style="font-size:0.7rem;color:var(--text-3);margin-top:4px;">${new Date(m.endedAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})} · ${m.rounds.length} rodadas</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><i class="ph ph-trophy"></i> Classificação</div>
+      ${sorted.map((p,i) => `
+        <div class="score-row ${i===0?'leader':''}" style="margin-bottom:5px;">
+          <span class="score-rank">${i===0?'<i class="ph ph-crown"></i>':i+1}</span>
+          <span class="score-name">${p.name}</span>
+          <span class="score-total">${p.score}</span>
+        </div>`).join('')}
+    </div>
+    ${m.rounds.length>0 ? `
+      <div class="card">
+        <div class="card-title"><i class="ph ph-list-bullets"></i> Rodadas</div>
+        ${m.rounds.map((r,ri) => {
+          const scores = Array.isArray(r) ? r : r.scores;
+          const notes = Array.isArray(r) ? null : r.notes;
+          return `
+          <div class="history-round" style="flex-direction:column;align-items:stretch;gap:3px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span class="history-round-label">R${ri+1}</span>
+              <div class="history-round-scores">${scores.map((s,pi) =>
+                `<span class="h-score ${s>0?'pos':s<0?'neg':'zero'}">${m.players[pi].split(' ')[0]}: ${s>0?'+':''}${s}</span>`
+              ).join('')}</div>
+            </div>
+            ${notes && notes.some(n=>n) ? `<div style="padding-left:30px;font-size:0.68rem;color:var(--text-3);line-height:1.5;">${notes.map((n,pi) => n ? `<div><span style="color:var(--text-2);font-weight:600;">${m.players[pi].split(' ')[0]}:</span> ${n}</div>` : '').join('')}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+    ${m.log&&m.log.length ? `
+      <div class="card" style="border-color:var(--secondary);">
+        <div class="card-title"><i class="ph ph-receipt"></i> De onde veio cada ponto</div>
+        ${m.log.map(entry => `
+          <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
+            <span style="color:var(--text-2);"><strong style="color:var(--text);">${m.players[entry.player].split(' ')[0]}</strong> — ${entry.label}</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:${entry.value>=0?'var(--secondary)':'var(--accent)'};">${entry.value>0?'+':''}${entry.value}</span>
+          </div>`).join('')}
+      </div>` : ''}
+    ${m.formulas&&m.formulas.length ? `
+      <div class="card">
+        <div class="card-title"><i class="ph ph-lightning"></i> Regras cadastradas neste jogo</div>
+        ${m.formulas.map(f => `
+          <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
+            <span style="color:var(--text-2);">${f.label}</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:${f.value>=0?'var(--secondary)':'var(--accent)'};">${f.value>0?'+':''}${f.value}</span>
+          </div>`).join('')}
+      </div>` : ''}
+    ${m.rules ? `
+      <div class="card">
+        <div class="card-title"><i class="ph ph-scroll"></i> Regras</div>
+        <div class="rules-box">${m.rules}</div>
+      </div>` : ''}
+    <button class="btn btn-danger btn-block btn-round mt-12" onclick="if(delMatch('${m.id}'))closeDetail();"><i class="ph ph-trash"></i> Excluir partida</button>`;
+  document.getElementById('detail-modal').classList.add('active');
+}
+
+function closeDetail() { document.getElementById('detail-modal').classList.remove('active'); }
+function delMatch(id) {
+  SFX.remove();
+  state.matches = state.matches.filter(m => m.id !== id);
+  save(); renderHistory();
+  toast('Partida excluída');
+  cloudDeleteMatch(id);
+  return true;
+}
+function replay(id) {
+  const m = state.matches.find(x => x.id === id);
+  if (!m) return;
+  const g = state.games.find(x => x.id === m.gameId);
+  if (g) startMatch(g.id);
+  else toast('Jogo não encontrado');
+}
+
+// ═══════════════════════════════════════════════
+// FUNÇÕES AUXILIARES ADICIONAIS
+// ═══════════════════════════════════════════════
+function removeLogEntry(li) {
+  const m = state.currentMatch;
+  if (!m || !m.log || !m.log[li]) return;
+  const entry = m.log[li];
+  m.scores[entry.player] -= entry.value;
+  m.log.splice(li, 1);
+  SFX.remove();
+  renderPlay();
+  broadcastState();
+  save();
 }
 
 function stepSheetScore(i, delta) {
   const input = document.getElementById(`si-${i}`);
   if (input) input.value = parseInt(input.value || 0) + delta;
-}
-
-// ═══════════════════════════════════════════════
-// TIMER V2
-// ═══════════════════════════════════════════════
-function toggleTimerV2() {
-  if (timerInterval) {
-    pauseTimer();
-  } else {
-    startTimer();
-  }
-  const icon = document.getElementById('t-play-icon');
-  if (icon) icon.className = timerInterval ? 'ph ph-pause' : 'ph ph-play';
-}
-
-function setTimerModeV2(mode) {
-  if (mode === 'infinite') { timerLimit = 0; }
-  else if (mode === '5') { timerLimit = 300; }
-  else if (mode === '10') { timerLimit = 600; }
-  else if (mode === 'custom') {
-    const v = prompt('Tempo limite em minutos (0 = sem limite):');
-    if (v === null) return;
-    const mins = parseInt(v);
-    if (isNaN(mins) || mins < 0) return;
-    timerLimit = mins * 60;
-  }
-  timerSeconds = 0;
-  updateTimerDisplay();
-  renderPlay();
-  toast(timerLimit > 0 ? `Limite: ${Math.floor(timerLimit/60)} min` : 'Modo livre');
-}
-
-let timerInterval = null;
-let timerSeconds = 0;
-let timerLimit = 0;
-
-function startTimer() {
-  if (timerInterval) return;
-  timerInterval = setInterval(() => {
-    timerSeconds++;
-    updateTimerDisplay();
-    if (timerLimit > 0 && timerSeconds >= timerLimit) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-      SFX.win();
-      toast('Tempo esgotado!');
-    }
-  }, 1000);
-}
-
-function pauseTimer() {
-  clearInterval(timerInterval);
-  timerInterval = null;
-}
-
-function resetTimer() {
-  pauseTimer();
-  timerSeconds = 0;
-  updateTimerDisplay();
-}
-
-function updateTimerDisplay() {
-  const el = document.getElementById('timer-display');
-  if (!el) return;
-  const h = Math.floor(timerSeconds / 3600);
-  const m = Math.floor((timerSeconds % 3600) / 60);
-  const s = timerSeconds % 60;
-  el.textContent = h > 0
-    ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-    : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-
-  const ring = document.getElementById('timer-ring-fill');
-  const circumference = 2 * Math.PI * 80;
-  const labelEl = document.getElementById('timer-remaining');
-
-  if (ring) {
-    if (timerLimit > 0) {
-      const pct = Math.min(timerSeconds / timerLimit, 1);
-      ring.style.strokeDasharray = circumference;
-      ring.style.strokeDashoffset = circumference * (1 - pct);
-      ring.classList.remove('t-infinite');
-      ring.classList.toggle('t-warning', pct > 0.8);
-      if (labelEl) {
-        const remaining = Math.max(0, timerLimit - timerSeconds);
-        const rm = Math.floor(remaining / 60);
-        const rs = remaining % 60;
-        labelEl.textContent = remaining <= 0 ? 'tempo esgotado!' : `resta ${rm}:${String(rs).padStart(2,'0')}`;
-      }
-    } else {
-      const cycle = (timerSeconds % 60) / 60;
-      ring.style.strokeDasharray = circumference;
-      ring.style.strokeDashoffset = circumference * (1 - cycle);
-      ring.classList.add('t-infinite');
-      ring.classList.remove('t-warning');
-      if (labelEl) labelEl.textContent = timerInterval ? 'em andamento' : 'pausado';
-    }
-  }
-}
-
-function setTimerLimit() {
-  const mins = parseInt(prompt('Tempo limite em minutos (0 = sem limite):'));
-  if (isNaN(mins) || mins < 0) return;
-  timerLimit = mins * 60;
-  timerSeconds = 0;
-  updateTimerDisplay();
-  toast(mins > 0 ? `Limite: ${mins} minutos` : 'Sem limite de tempo');
 }
 
 // ═══════════════════════════════════════════════
@@ -2056,6 +2331,7 @@ window.selectThemeModal = selectThemeModal;
 window.selectFont = selectFont;
 window.selectType = selectType;
 window.selectScoring = selectScoring;
+window.selectTeamMode = selectTeamMode;
 window.selEmoji = selEmoji;
 window.changePlayerCount = changePlayerCount;
 window.addFormulaRow = addFormulaRow;
@@ -2068,6 +2344,7 @@ window.handleProfileAvatar = handleProfileAvatar;
 window.saveProfile = saveProfile;
 window.startMatch = startMatch;
 window.deleteGame = deleteGame;
+window.duplicateGame = duplicateGame;
 window.showRules = showRules;
 window.closeRulesModal = closeRulesModal;
 window.showDetail = showDetail;
