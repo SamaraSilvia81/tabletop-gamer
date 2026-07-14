@@ -185,11 +185,24 @@ function navTo(v) {
   window.location.hash = v;
 }
 
+let _toastTimer = null;
 function toast(msg) {
   const el = document.getElementById('toast');
+  if (!el) return;
+  // Cancela timer anterior para evitar conflito de timeouts
+  if (_toastTimer) { clearTimeout(_toastTimer); _toastTimer = null; }
+  // Remove classe primeiro, espera repaint, depois re-adiciona — garante re-trigger da animação
+  el.classList.remove('show');
   el.textContent = msg;
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2200);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      el.classList.add('show');
+      _toastTimer = setTimeout(() => {
+        el.classList.remove('show');
+        _toastTimer = null;
+      }, 2200);
+    });
+  });
 }
 
 function spawnConfetti() {
@@ -273,7 +286,19 @@ function applyWallpaperPreview(src) {
     const posX = setup.wpPosX ?? 50;
     const posY = setup.wpPosY ?? 50;
     const zoom = setup.wpZoom ?? 100;
-    prev.innerHTML = `<img src="${src}" style="object-position:${posX}% ${posY}%;transform:scale(${zoom/100});" onerror="this.parentElement.innerHTML='<div class=wp-label>URL inválida</div>'"><div class="wp-label" style="color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.8);"><i class='ph ph-check'></i> Fundo definido</div>`;
+    // Usa background-image idêntico à tela real (play-hero-bg) para que o preview seja fiel
+    prev.style.backgroundImage = `url('${src}')`;
+    prev.style.backgroundPosition = `${posX}% ${posY}%`;
+    prev.style.backgroundSize = `${zoom}%`;
+    prev.style.backgroundRepeat = 'no-repeat';
+    prev.innerHTML = `<div class="wp-label" style="color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.8);"><i class='ph ph-check'></i> Fundo definido</div>`;
+    // Testa se a imagem é válida; se não, mostra erro
+    const testImg = new Image();
+    testImg.onerror = () => {
+      prev.style.backgroundImage = '';
+      prev.innerHTML = `<div class="wp-label">URL inválida</div>`;
+    };
+    testImg.src = src;
     if (controls) {
       controls.style.display = '';
       document.getElementById('wp-pos-x').value = posX;
@@ -281,6 +306,7 @@ function applyWallpaperPreview(src) {
       document.getElementById('wp-zoom').value = zoom;
     }
   } else {
+    prev.style.backgroundImage = '';
     prev.innerHTML = `<div class="wp-label"><i class="ph ph-image" style="font-size:1.2rem;"></i> Sem imagem</div>`;
     if (controls) controls.style.display = 'none';
   }
