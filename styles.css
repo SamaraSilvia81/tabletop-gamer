@@ -1025,7 +1025,7 @@ body::after {
   box-shadow: var(--card-shadow-sm, var(--card-shadow));
 }
 
-.play-hero-bg {
+.play-hero > .play-hero-bg {
   position: absolute;
   inset: 0;
   background-repeat: no-repeat;

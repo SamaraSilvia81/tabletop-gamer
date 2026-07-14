@@ -59,6 +59,10 @@ function enterApp() {
 const SFX = (() => {
   let ctx;
   const getCtx = () => { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); return ctx; };
+  // Navegadores bloqueiam o AudioContext até haver um gesto do usuário na página.
+  // Destrava assim que o primeiro clique/toque acontecer, evitando o aviso no console.
+  const unlock = () => { const c = getCtx(); if (c.state === 'suspended') c.resume(); };
+  ['click','touchstart','keydown'].forEach(ev => document.addEventListener(ev, unlock, { once: true }));
   const play = (freq, type, dur, vol = 0.1) => {
     try {
       const c = getCtx(), o = c.createOscillator(), g = c.createGain();
