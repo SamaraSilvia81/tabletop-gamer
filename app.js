@@ -59,8 +59,6 @@ function enterApp() {
 const SFX = (() => {
   let ctx;
   const getCtx = () => { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); return ctx; };
-  // Navegadores bloqueiam o AudioContext até haver um gesto do usuário na página.
-  // Destrava assim que o primeiro clique/toque acontecer, evitando o aviso no console.
   const unlock = () => { const c = getCtx(); if (c.state === 'suspended') c.resume(); };
   ['click','touchstart','keydown'].forEach(ev => document.addEventListener(ev, unlock, { once: true }));
   const play = (freq, type, dur, vol = 0.1) => {
@@ -133,8 +131,6 @@ const AVATAR_COLORS = ['#D9A441','#4A9B7F','#8E3542','#3B62B8','#6846C6','#BB240
 
 const EMOJI_AVATARS = ['🐲','🦊','🐙','🦁','🐧','🦄','🐺','🐸','🐼','🦖','🐝','🐬','🦉','🐳'];
 
-// Renderiza um avatar (foto enviada, emoji escolhido, ou nada) de forma consistente
-// em qualquer lugar do app: participantes da sala, jogadores, perfil, etc.
 function avatarHTML(avatar) {
   if (!avatar) return '';
   if (avatar.startsWith('emoji:')) {
@@ -170,7 +166,6 @@ const FONTS = [
 let state = { games: [], matches: [], currentMatch: null };
 const LS = 'tabletop_v4';
 
-// Gera um UUID válido (compatível com a coluna `uuid` do Supabase).
 function genId() {
   if (crypto.randomUUID) return crypto.randomUUID();
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -207,7 +202,6 @@ function navTo(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
   document.getElementById(`view-${v}`).classList.add('active');
   document.getElementById('fab-btn').style.display = v === 'library' ? 'grid' : 'none';
-  // Show/hide round trigger
   const isPlay = v === 'play' && state.currentMatch;
   const roundTrigger = document.getElementById('round-trigger-fixed');
   if (roundTrigger) roundTrigger.style.display = (isPlay && state.currentMatch?.isHost) ? 'block' : 'none';
@@ -859,7 +853,6 @@ function removeLogEntry(li) {
 function confirmRound() {
   const m = state.currentMatch;
   if (!m) return;
-  // Read from bottom sheet (si-*) if open, fallback to inline (ri-*)
   const scores = m.players.map((_,i) => parseInt((document.getElementById(`si-${i}`) || document.getElementById(`ri-${i}`))?.value)||0);
   const notes = m.players.map((_,i) => (document.getElementById(`sn-${i}`) || document.getElementById(`rn-${i}`))?.value?.trim()||'');
   m.rounds.push({ scores, notes });
@@ -1285,8 +1278,7 @@ function joinRoomFromInput() {
 }
 
 // ═══════════════════════════════════════════════
-// IDENTIDADE AO ENTRAR NA SALA — nome + avatar (foto ou emoji),
-// pra dar pra saber quem é quem, tipo Kahoot.
+// IDENTIDADE AO ENTRAR NA SALA
 // ═══════════════════════════════════════════════
 let pendingJoinCode = null;
 let pendingIdentityAvatar = '';
@@ -1346,6 +1338,7 @@ function confirmIdentityAndJoin() {
   profile.nickname = name;
   profile.avatar = pendingIdentityAvatar;
   localStorage.setItem('tt_profile', JSON.stringify(profile));
+  cloudUpsertPreferences(); // Salva no banco
   closeIdentityModal();
   const code = pendingJoinCode;
   pendingJoinCode = null;
@@ -1377,16 +1370,26 @@ function joinRoom(code) {
   }
 })();
 
-// PERFIL
+// ═══════════════════════════════════════════════
+// PERFIL (com sincronização com o Supabase)
+// ═══════════════════════════════════════════════
 let profile = { nickname: '', avatar: '' };
+
 function loadProfile() {
-  try { profile = { ...profile, ...JSON.parse(localStorage.getItem('tt_profile') || '{}') }; } catch(e) {}
+  try {
+    const saved = JSON.parse(localStorage.getItem('tt_profile') || '{}');
+    profile = { ...profile, ...saved };
+  } catch(e) {}
 }
+
+// Salva no localStorage e envia para a nuvem (se logado)
 function saveProfile() {
   profile.nickname = document.getElementById('profile-nickname')?.value.trim() || '';
   localStorage.setItem('tt_profile', JSON.stringify(profile));
   renderProfile();
+  cloudUpsertPreferences();
 }
+
 function handleProfileAvatar(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -1401,12 +1404,15 @@ function handleProfileAvatar(e) {
       const side = Math.min(img.width, img.height);
       ctx.drawImage(img, (img.width-side)/2, (img.height-side)/2, side, side, 0, 0, S, S);
       profile.avatar = canvas.toDataURL('image/jpeg', 0.85);
-      saveProfile();
+      localStorage.setItem('tt_profile', JSON.stringify(profile));
+      renderProfile();
+      cloudUpsertPreferences();
     };
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
 }
+
 function renderProfile() {
   const nickInput = document.getElementById('profile-nickname');
   if (nickInput && document.activeElement !== nickInput) nickInput.value = profile.nickname;
@@ -1422,6 +1428,45 @@ function renderProfile() {
     ? state.matches.filter(m => m.winner?.name?.trim().toLowerCase() === profile.nickname.trim().toLowerCase()).length
     : 0;
   const wEl = document.getElementById('stat-wins'); if (wEl) wEl.textContent = wins;
+}
+
+// Sincroniza perfil com a nuvem
+function profileToRow(p) {
+  return {
+    user_id: cloudUserId,
+    nickname: p.nickname || '',
+    avatar: p.avatar || '',
+    theme: currentTheme,
+    grain: grainEnabled,
+    updated_at: new Date().toISOString()
+  };
+}
+
+async function cloudUpsertPreferences() {
+  if (!sb || !cloudUserId) return;
+  console.log('Salvando preferências na nuvem:', profile.nickname, profile.avatar ? 'com avatar' : 'sem avatar');
+  const { error } = await sb.from('user_preferences').upsert(profileToRow(profile), { onConflict: 'user_id' });
+  if (error) console.error('Falha ao salvar preferências:', error);
+  else console.log('Preferências salvas com sucesso');
+}
+
+async function cloudPullPreferences() {
+  if (!sb || !cloudUserId) return;
+  const { data, error } = await sb.from('user_preferences')
+    .select('*')
+    .eq('user_id', cloudUserId)
+    .maybeSingle();
+  if (error) { console.error('Falha ao puxar preferências:', error); return; }
+  if (data) {
+    console.log('Preferências da nuvem:', data);
+    profile.nickname = data.nickname || '';
+    profile.avatar = data.avatar || '';
+    localStorage.setItem('tt_profile', JSON.stringify(profile));
+    renderProfile();
+    // Também aplica tema e grain se vierem
+    if (data.theme) { applyTheme(data.theme); buildThemeGrid('settings-theme-grid'); }
+    if (data.grain !== undefined) { toggleGrain(data.grain); }
+  }
 }
 
 // MUSIC
@@ -1492,7 +1537,7 @@ try {
 } catch(e) { console.warn('Supabase init failed:', e); }
 
 // ═══════════════════════════════════════════════
-// SINCRONIZAÇÃO COM A NUVEM (jogos e partidas)
+// SINCRONIZAÇÃO COM A NUVEM (jogos, partidas e perfil)
 // ═══════════════════════════════════════════════
 let cloudUserId = null;
 let cloudSyncing = false;
@@ -1688,7 +1733,10 @@ if (sb) {
       if (_cameFromOAuth) toast('Login realizado!');
       const splash = document.getElementById('splash');
       if (splash && splash.style.display !== 'none') enterApp();
-      pullCloudData(true);
+      // Puxa dados e perfil
+      pullCloudData(true).then(() => {
+        cloudPullPreferences();
+      });
     }
     if (event === 'SIGNED_OUT') {
       cloudUserId = null;
@@ -1697,7 +1745,12 @@ if (sb) {
   });
   // Se o app abrir com uma sessão já ativa (usuário voltou logado), sincroniza também.
   sb.auth.getSession().then(({ data: { session } }) => {
-    if (session?.user) { cloudUserId = session.user.id; pullCloudData(true); }
+    if (session?.user) {
+      cloudUserId = session.user.id;
+      pullCloudData(true).then(() => {
+        cloudPullPreferences();
+      });
+    }
   });
   updateAuthUI();
 }
@@ -1839,9 +1892,8 @@ function updateTimerDisplay() {
     ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
     : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 
-  // Update ring SVG
   const ring = document.getElementById('timer-ring-fill');
-  const circumference = 2 * Math.PI * 80; // r=80
+  const circumference = 2 * Math.PI * 80;
   const labelEl = document.getElementById('timer-remaining');
 
   if (ring) {
