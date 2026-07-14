@@ -311,6 +311,18 @@
     </div>
 
     <div class="form-group">
+      <label class="form-label">Modo de jogo</label>
+      <div class="type-grid" id="team-mode-grid">
+        <div class="type-option selected" data-team="false" onclick="selectTeamMode(this, false)">
+          <span><i class="ph ph-user"></i></span>Individual
+        </div>
+        <div class="type-option" data-team="true" onclick="selectTeamMode(this, true)">
+          <span><i class="ph ph-users"></i></span>Duplas
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
       <label class="form-label">Pontuação</label>
       <div class="scoring-grid">
         <div class="scoring-option selected" data-scoring="high" onclick="selectScoring(this)"><span><i class="ph ph-arrow-up"></i></span>Maior vence</div>
@@ -445,12 +457,12 @@
   </button>
 </div>
 
-<!-- ROUND BOTTOM SHEET -->
+<!-- ROUND BOTTOM SHEET (simplificado para admin) -->
 <div class="round-sheet-overlay" id="rs-overlay" onclick="closeRoundSheet()"></div>
 <div class="round-sheet" id="rs-panel">
   <div class="rs-handle"></div>
   <div class="rs-head">
-    <span class="rs-title">Nova Rodada</span>
+    <span class="rs-title">Finalizar Rodada</span>
     <span class="rs-badge" id="rs-badge">R1</span>
   </div>
   <div id="rs-players"></div>
@@ -459,8 +471,7 @@
 
 <div class="toast" id="toast"></div>
 <div class="confetti-container" id="confetti"></div>
-  
-<script src="app.js"></script>
 
+<script src="app.js"></script>
 </body>
 </html>
