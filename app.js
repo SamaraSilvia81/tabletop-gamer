@@ -635,6 +635,7 @@ function renderPlay() {
         </div>
         <div style="font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:700;color:var(--text);" id="timer-display">00:00</div>
       </div>
+      ${isHost ? `
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
         <button class="btn btn-primary btn-sm btn-round" style="flex:1;" onclick="startTimer()"><i class="ph ph-play"></i> Iniciar</button>
         <button class="btn btn-ghost btn-sm btn-round" style="flex:1;" onclick="pauseTimer()"><i class="ph ph-pause"></i> Pausar</button>
@@ -643,7 +644,7 @@ function renderPlay() {
       <div style="display:flex;gap:6px;margin-top:6px;">
         <button class="btn btn-ghost btn-sm btn-round" style="flex:1;font-size:0.72rem;" onclick="timerLimit=0;updateTimerDisplay();document.getElementById('timer-remaining').textContent='sem limite — só para contabilizar';toast('Modo: só contar');"><i class="ph ph-infinity"></i> Só contar</button>
         <button class="btn btn-ghost btn-sm btn-round" style="flex:1;font-size:0.72rem;" onclick="setTimerLimit()"><i class="ph ph-hourglass"></i> Definir limite</button>
-      </div>
+      </div>` : `<div style="font-size:0.7rem;color:var(--text-3);margin-top:8px;">O anfitrião controla o cronômetro.</div>`}
     </div>
   `;
 
@@ -735,11 +736,11 @@ function renderPlay() {
             <input type="number" id="ri-${i}" value="0" inputmode="numeric" onfocus="this.select()" ${isDisabled ? 'disabled' : ''} style="width:70px;text-align:center;padding:6px;border-radius:8px;border:1.5px solid var(--border);background:${isDisabled ? 'var(--surface-3)' : 'var(--surface-2)'};">
           </div>
           <div style="padding-left:38px;margin-top:-4px;margin-bottom:10px;">
-            <input type="text" class="form-input" id="rn-${i}" placeholder="Anotação..." style="font-size:0.75rem;padding:7px 10px;border-radius:8px;" ${isDisabled ? 'disabled' : ''}>
+            ${isDisabled ? '' : `<input type="text" class="form-input" id="rn-${i}" placeholder="Anotação..." style="font-size:0.75rem;padding:7px 10px;border-radius:8px;">`}
           </div>
         `;
       }).join('')}
-      <button class="btn btn-primary btn-block btn-round mt-12" onclick="confirmRound()"><i class="ph ph-check"></i> Confirmar Rodada</button>
+      ${isHost ? `<button class="btn btn-primary btn-block btn-round mt-12" onclick="confirmRound()"><i class="ph ph-check"></i> Confirmar Rodada</button>` : `<div style="font-size:0.72rem;color:var(--text-3);text-align:center;margin-top:10px;padding:8px;background:var(--surface-2);border-radius:8px;">Aguardando o anfitrião confirmar a rodada</div>`}
     </div>
   `;
 
@@ -1046,14 +1047,16 @@ function renderRoomParticipants() {
         const avatarContent = p.avatar
           ? avatarHTML(p.avatar)
           : `<i class="ph ph-user" style="font-size:1rem;display:flex;align-items:center;justify-content:center;height:100%;color:#fff;"></i>`;
+        const isCurrentHost = m.isHost;
         return `
-          <div style="display:flex;align-items:center;gap:6px;background:var(--surface-2);border-radius:20px;padding:4px 12px 4px 4px;border:1.5px solid ${p.isHost ? 'var(--primary)' : 'var(--border)'};">
+          <div style="display:flex;align-items:center;gap:6px;background:var(--surface-2);border-radius:20px;padding:4px 8px 4px 4px;border:1.5px solid ${p.isHost ? 'var(--primary)' : 'var(--border)'};">
             <div style="width:30px;height:30px;border-radius:50%;background:${bgColor};border:1.5px solid var(--text);overflow:hidden;">
               ${avatarContent}
             </div>
             <span style="font-size:0.8rem;font-weight:600;">${p.nickname}</span>
             ${p.isHost ? '<span style="font-size:0.6rem;color:var(--primary);">👑</span>' : ''}
             <span style="font-size:0.6rem;color:var(--text-3);">(Jogador ${p.slot+1})</span>
+            ${isCurrentHost && !p.isHost ? `<button onclick="kickParticipant('${p.nickname}')" style="margin-left:2px;background:none;border:none;cursor:pointer;color:var(--accent);font-size:1rem;padding:2px 4px;border-radius:4px;display:flex;align-items:center;" title="Expulsar ${p.nickname}"><i class="ph ph-x-circle"></i></button>` : ''}
           </div>
         `;
       }).join('')}
@@ -1200,6 +1203,17 @@ function leaveRoom() {
   closeRoomModal();
   toast('Você saiu da sala');
   renderPlay();
+}
+
+function kickParticipant(nickname) {
+  const m = state.currentMatch;
+  if (!m || !m.isHost) return;
+  m.participants = m.participants.filter(p => p.nickname !== nickname);
+  broadcastState();
+  save();
+  renderPlay();
+  renderRoomParticipants();
+  toast(`${nickname} foi removido da sala`);
 }
 
 function copyRoomLink() {
