@@ -310,18 +310,18 @@
       </div>
     </div>
 
-   <div class="form-group">
+  <div class="form-group">
     <label class="form-label">Modos de jogo suportados</label>
     <div class="type-grid" id="team-mode-grid">
-      <label class="type-option selected" data-mode="individual">
+      <label class="type-option selected" data-mode="individual" onclick="toggleTeamMode(this)">
         <input type="checkbox" checked style="display:none;">
         <span><i class="ph ph-user"></i></span>Individual
       </label>
-      <label class="type-option" data-mode="duplas">
+      <label class="type-option" data-mode="duplas" onclick="toggleTeamMode(this)">
         <input type="checkbox" style="display:none;">
         <span><i class="ph ph-users"></i></span>Duplas
       </label>
-      <label class="type-option" data-mode="times">
+      <label class="type-option" data-mode="times" onclick="toggleTeamMode(this)">
         <input type="checkbox" style="display:none;">
         <span><i class="ph ph-users-three"></i></span>Times
       </label>
