@@ -173,12 +173,15 @@ const load = () => {
     const d = JSON.parse(localStorage.getItem(LS) || localStorage.getItem('tabletop_v3') || '{}');
     state.games   = d.games   || [];
     state.matches = d.matches || [];
+    // Partida em andamento (incluindo sala/participantes) também é salva, senão
+    // qualquer reload no meio de uma sala perdia tudo e obrigava a criar sala nova.
+    state.currentMatch = d.currentMatch || null;
   } catch(e) {}
 };
 
 const save = () => {
   try {
-    localStorage.setItem(LS, JSON.stringify({ games: state.games, matches: state.matches }));
+    localStorage.setItem(LS, JSON.stringify({ games: state.games, matches: state.matches, currentMatch: state.currentMatch }));
     return true;
   } catch (e) {
     console.error('Falha ao salvar:', e);
@@ -577,6 +580,7 @@ function startMatch(gid) {
   navTo('play');
   resetTimer(); timerLimit = 0;
   renderPlay();
+  save();
 }
 
 function getSorted(m) {
@@ -783,6 +787,7 @@ function applyFormula(fi) {
   renderPlay();
   toast(`${f.label}: ${f.value>0?'+':''}${f.value} pts → ${m.players[playerIdx].split(' ')[0]}`);
   broadcastState();
+  save();
 }
 
 function removeLogEntry(li) {
@@ -794,6 +799,7 @@ function removeLogEntry(li) {
   SFX.remove();
   renderPlay();
   broadcastState();
+  save();
 }
 
 function confirmRound() {
@@ -804,7 +810,7 @@ function confirmRound() {
   m.rounds.push({ scores, notes });
   scores.forEach((s,i) => m.scores[i] += s);
   SFX.score();
-  setTimeout(() => { renderPlay(); toast(`Rodada ${m.rounds.length} confirmada`); broadcastState(); }, 380);
+  setTimeout(() => { renderPlay(); toast(`Rodada ${m.rounds.length} confirmada`); broadcastState(); save(); }, 380);
 }
 
 function endMatch() {
@@ -1102,6 +1108,7 @@ function subscribeRoom(code, isHost) {
         });
       }
     }
+    save();
     if (wasEnded) { toast('O anfitrião encerrou a partida'); navTo('history'); renderHistory(); }
     else if (document.getElementById('view-play').classList.contains('active') || !isHost) {
       navTo('play'); renderPlay();
@@ -1127,6 +1134,7 @@ function subscribeRoom(code, isHost) {
       const newPart = { ...payload, slot: freeSlot, isHost: false };
       m.participants.push(newPart);
       broadcastState();
+      save();
       toast(`${payload.nickname} entrou na sala!`);
       renderPlay();
       renderRoomParticipants();
@@ -1138,6 +1146,7 @@ function subscribeRoom(code, isHost) {
       if (!state.currentMatch.participants) state.currentMatch.participants = [];
       if (!state.currentMatch.participants.some(p => p.nickname === payload.nickname)) {
         state.currentMatch.participants.push(payload);
+        save();
         if (document.getElementById('room-modal').classList.contains('active')) {
           renderRoomParticipants();
         }
@@ -1164,6 +1173,7 @@ function createRoom() {
   m.isHost = true;
   subscribeRoom(code, true);
   SFX.confirm();
+  save();
   setTimeout(broadcastState, 400);
   openRoomModal();
 }
@@ -1172,6 +1182,7 @@ function leaveRoom() {
   const m = state.currentMatch;
   if (roomChannel) { sb?.removeChannel(roomChannel); roomChannel = null; }
   if (m) { m.roomCode = null; m.isHost = false; m.participants = []; }
+  save();
   closeRoomModal();
   toast('Você saiu da sala');
   renderPlay();
@@ -1660,6 +1671,23 @@ if (['library','play','history','settings'].includes(initHash)) {
 } else {
   navTo('library');
 }
+
+// Retoma a sala em andamento (se havia uma) em vez de perder tudo a cada reload —
+// isso é o que fazia parecer que "a sala não fica salva" e que os participantes
+// sumiam na rodada seguinte.
+(function resumeRoomIfAny() {
+  const m = state.currentMatch;
+  if (m && m.roomCode && !m.ended) {
+    subscribeRoom(m.roomCode, !!m.isHost);
+    // Depois de reconectar, pede uma sincronização fresca pra pegar qualquer coisa
+    // que tenha mudado enquanto o app estava fechado (e o host confirma a própria
+    // presença de novo pra quem tiver entrado nesse meio tempo).
+    setTimeout(() => {
+      roomChannel?.send({ type: 'broadcast', event: 'request-sync', payload: {} });
+      if (m.isHost) broadcastState();
+    }, 600);
+  }
+})();
 // Se voltou do OAuth do Google, o access_token vem no hash — entra no app direto sem precisar clicar
 (function checkOAuthRedirect() {
   if (window.location.hash && window.location.hash.includes('access_token')) {
