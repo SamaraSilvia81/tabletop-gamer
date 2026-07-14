@@ -595,8 +595,13 @@ function startMatch(gid) {
   save();
 }
 
+function slotName(m, i) {
+  const part = m.participants && m.participants.find(p => p.slot === i);
+  return part ? part.nickname : m.players[i];
+}
+
 function getSorted(m) {
-  const arr = m.players.map((name,i) => ({ name, score: m.scores[i], idx: i }));
+  const arr = m.players.map((name,i) => ({ name: slotName(m, i), score: m.scores[i], idx: i }));
   arr.sort((a,b) => m.scoring==='high' ? b.score-a.score : a.score-b.score);
   return arr;
 }
@@ -664,13 +669,13 @@ function renderPlay() {
   if (m.formulas && m.formulas.length) {
     let playerOpts = '';
     if (isHost) {
-      playerOpts = m.players.map((p,pi) => `<option value="${pi}">${p}</option>`).join('');
+      playerOpts = m.players.map((p,pi) => `<option value="${pi}">${slotName(m, pi)}</option>`).join('');
     } else {
       const myPart = m.participants.find(p => p.nickname === profile.nickname);
       if (myPart) {
-        playerOpts = `<option value="${myPart.slot}">${m.players[myPart.slot]}</option>`;
+        playerOpts = `<option value="${myPart.slot}">${myPart.nickname}</option>`;
       } else {
-        playerOpts = `<option value="0">${m.players[0]}</option>`;
+        playerOpts = `<option value="0">${slotName(m, 0)}</option>`;
       }
     }
     const chips = m.formulas.map((f,fi) =>
@@ -697,7 +702,7 @@ function renderPlay() {
         <div class="card-title"><i class="ph ph-receipt"></i> Registro de pontuação</div>
         ${m.log.map((entry, li) => ({entry, li})).reverse().map(({entry, li}) => `
           <div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.8rem;">
-            <span style="color:var(--text-2);"><strong style="color:var(--text);">${m.players[entry.player].split(' ')[0]}</strong> — ${entry.label}</span>
+            <span style="color:var(--text-2);"><strong style="color:var(--text);">${slotName(m, entry.player).split(' ')[0]}</strong> — ${entry.label}</span>
             <span style="display:flex;align-items:center;gap:8px;">
               <span style="font-family:'JetBrains Mono',monospace;color:${entry.value>=0?'var(--secondary)':'var(--accent)'};">${entry.value>0?'+':''}${entry.value}</span>
               ${isHost ? `<button class="btn btn-ghost btn-sm" style="padding:2px 6px;" onclick="removeLogEntry(${li})" title="Desfazer"><i class="ph ph-x"></i></button>` : ''}
@@ -755,10 +760,10 @@ function renderPlay() {
             <div style="display:flex;align-items:center;justify-content:space-between;">
               <span class="history-round-label">R${ri+1}</span>
               <div class="history-round-scores">${r.scores.map((s,pi) =>
-                `<span class="h-score ${s>0?'pos':s<0?'neg':'zero'}">${m.players[pi].split(' ')[0]}: ${s>0?'+':''}${s}</span>`
+                `<span class="h-score ${s>0?'pos':s<0?'neg':'zero'}">${slotName(m, pi).split(' ')[0]}: ${s>0?'+':''}${s}</span>`
               ).join('')}</div>
             </div>
-            ${r.notes && r.notes.some(n=>n) ? `<div style="padding-left:30px;font-size:0.68rem;color:var(--text-3);line-height:1.5;">${r.notes.map((n,pi) => n ? `<div><span style="color:var(--text-2);font-weight:600;">${m.players[pi].split(' ')[0]}:</span> ${n}</div>` : '').join('')}</div>` : ''}
+            ${r.notes && r.notes.some(n=>n) ? `<div style="padding-left:30px;font-size:0.68rem;color:var(--text-3);line-height:1.5;">${r.notes.map((n,pi) => n ? `<div><span style="color:var(--text-2);font-weight:600;">${slotName(m, pi).split(' ')[0]}:</span> ${n}</div>` : '').join('')}</div>` : ''}
           </div>`).join('')}
       </div>`;
   }
@@ -800,7 +805,7 @@ function applyFormula(fi) {
   }
   SFX.score();
   renderPlay();
-  toast(`${f.label}: ${f.value>0?'+':''}${f.value} pts → ${m.players[playerIdx].split(' ')[0]}`);
+  toast(`${f.label}: ${f.value>0?'+':''}${f.value} pts → ${slotName(m, playerIdx).split(' ')[0]}`);
   broadcastState();
   save();
 }
