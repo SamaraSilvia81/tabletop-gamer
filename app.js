@@ -951,6 +951,8 @@ function startMatch(gid) {
   resetTimer(); timerLimit = 0;
   renderPlay();
   save();
+  startAutoSave(); // inicia autosave periódico na nuvem
+  cloudSaveCurrentMatch(); // salva imediatamente ao criar
 }
 
 function openTeamSetupModal() {
@@ -1544,7 +1546,8 @@ function finalizeRound(m) {
     renderPlay(); 
     toast(`Rodada ${m.rounds.length} finalizada!`); 
     save();
-    broadcastState(); 
+    broadcastState();
+    cloudSaveCurrentMatch(); // salva partida em andamento na nuvem
   }, 380);
 }
 
@@ -1731,6 +1734,8 @@ function finishMatch(m) {
 
   save();
   cloudUpsertMatch(match);
+  cloudClearCurrentMatch(); // remove partida em andamento da nuvem
+  stopAutoSave();           // para o timer periódico
 
   if (hasActivity) {
     SFX.win();
@@ -2127,6 +2132,8 @@ function subscribeRoom(code, isHost) {
       m.participants.push(newPart);
       broadcastState();
       save();
+      cloudSaveCurrentMatch(); // atualiza participants na nuvem
+      cloudSaveGuestSession(m.roomCode, newPart); // salva convidado individualmente
       toast(`${payload.nickname} entrou na sala!`);
       renderPlay();
       renderRoomParticipants();
@@ -2616,6 +2623,119 @@ async function cloudDeleteMatch(id) {
   if (error) console.error('Falha ao excluir partida na nuvem:', error);
 }
 
+// ============================================================
+//  PARTIDA EM ANDAMENTO — AUTOSAVE NA NUVEM
+//  Salva currentMatch na tabela current_matches a cada rodada
+//  e periodicamente (30s). Ao encerrar, limpa o registro.
+//  Convidados são salvos em guest_sessions (sem auth).
+// ============================================================
+
+// Necessita tabela no Supabase:
+// CREATE TABLE current_matches (
+//   room_code TEXT PRIMARY KEY,
+//   host_user_id TEXT,
+//   match_data JSONB,
+//   updated_at TIMESTAMPTZ DEFAULT now()
+// );
+// CREATE TABLE guest_sessions (
+//   id TEXT PRIMARY KEY,   -- roomCode + ':' + nickname
+//   room_code TEXT,
+//   nickname TEXT,
+//   avatar TEXT,
+//   slot INT,
+//   joined_at TIMESTAMPTZ DEFAULT now(),
+//   updated_at TIMESTAMPTZ DEFAULT now()
+// );
+// RLS: permitir insert/update anônimo nas duas tabelas (policy: true para anon)
+
+let _autoSaveTimer = null;
+
+async function cloudSaveCurrentMatch() {
+  const m = state.currentMatch;
+  if (!m || !m.isHost || !sb) return; // só o host salva
+  // host precisa ter user_id OU a partida ter roomCode
+  const hostId = cloudUserId || ('anon-' + (m.roomCode || 'local'));
+  try {
+    const row = {
+      room_code: m.roomCode || ('local-' + m.gameId),
+      host_user_id: hostId,
+      match_data: JSON.parse(JSON.stringify(m)), // cópia limpa
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await sb.from('current_matches').upsert(row, { onConflict: 'room_code' });
+    if (error) console.warn('Autosave partida falhou:', error.message);
+    else console.log('💾 Partida em andamento salva na nuvem');
+  } catch(e) { console.warn('Autosave erro:', e); }
+}
+
+async function cloudClearCurrentMatch() {
+  const m = state.currentMatch;
+  if (!sb) return;
+  // Tenta limpar pelo roomCode se existia
+  const code = m?.roomCode || localStorage.getItem('tt_last_room_code');
+  if (!code) return;
+  try {
+    await sb.from('current_matches').delete().eq('room_code', code);
+    localStorage.removeItem('tt_last_room_code');
+    console.log('🗑️ Partida em andamento removida da nuvem');
+  } catch(e) {}
+}
+
+async function cloudRestoreCurrentMatch() {
+  // Tenta restaurar partida em andamento do host ao abrir o app
+  if (!sb || !cloudUserId) return;
+  try {
+    const { data, error } = await sb.from('current_matches')
+      .select('*')
+      .eq('host_user_id', cloudUserId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return;
+    const m = data.match_data;
+    if (!m || !m.gameId) return;
+    // Só restaura se a partida local não existe ou é mais antiga
+    const localMatch = state.currentMatch;
+    if (localMatch && localMatch.startedAt >= m.startedAt) return;
+    state.currentMatch = { ...m, isHost: true };
+    if (data.room_code) localStorage.setItem('tt_last_room_code', data.room_code);
+    save();
+    renderPlay();
+    console.log('♻️ Partida em andamento restaurada da nuvem:', m.gameName);
+    toast(`Partida de "${m.gameName}" restaurada da nuvem ✓`);
+  } catch(e) { console.warn('Restauração falhou:', e); }
+}
+
+function startAutoSave() {
+  stopAutoSave();
+  _autoSaveTimer = setInterval(() => {
+    if (state.currentMatch?.isHost) cloudSaveCurrentMatch();
+  }, 30000); // a cada 30s
+}
+
+function stopAutoSave() {
+  if (_autoSaveTimer) { clearInterval(_autoSaveTimer); _autoSaveTimer = null; }
+}
+
+// Salva participante convidado na nuvem (sem auth, anônimo)
+async function cloudSaveGuestSession(roomCode, participant) {
+  if (!sb || !roomCode || !participant?.nickname) return;
+  try {
+    const id = `${roomCode}:${participant.nickname}`;
+    const row = {
+      id,
+      room_code: roomCode,
+      nickname: participant.nickname,
+      avatar: participant.avatar || '',
+      slot: participant.slot ?? -1,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await sb.from('guest_sessions').upsert(row, { onConflict: 'id' });
+    if (error) console.warn('Salvar convidado falhou:', error.message);
+    else console.log('👤 Convidado salvo na nuvem:', participant.nickname);
+  } catch(e) { console.warn('cloudSaveGuestSession erro:', e); }
+}
+
 async function pullCloudData() {
   if (!sb || !cloudUserId || cloudSyncing) return;
   cloudSyncing = true;
@@ -2761,7 +2881,9 @@ if (sb) {
       if (_cameFromOAuth) toast('Login realizado!');
       const splash = document.getElementById('splash');
       if (splash && splash.style.display !== 'none') enterApp();
-      pullCloudData().then(() => cloudPullPreferences());
+      pullCloudData()
+        .then(() => cloudPullPreferences())
+        .then(() => cloudRestoreCurrentMatch()); // tenta restaurar partida em andamento
     }
     if (event === 'SIGNED_OUT') {
       cloudUserId = null;
@@ -2771,7 +2893,9 @@ if (sb) {
   sb.auth.getSession().then(({ data: { session } }) => {
     if (session?.user) {
       cloudUserId = session.user.id;
-      pullCloudData().then(() => cloudPullPreferences());
+      pullCloudData()
+        .then(() => cloudPullPreferences())
+        .then(() => cloudRestoreCurrentMatch());
     }
   });
   updateAuthUI();
@@ -2984,6 +3108,11 @@ function initApp() {
       }, 600);
     }
 
+    // Retoma autosave se havia partida em andamento
+    if (state.currentMatch && state.currentMatch.isHost) {
+      startAutoSave();
+    }
+
     if (window.location.hash && window.location.hash.includes('access_token')) {
       history.replaceState(null, '', window.location.pathname);
       setTimeout(() => {
@@ -3104,7 +3233,5 @@ window.toggleTimerV2 = toggleTimerV2;
 window.setTimerModeV2 = setTimerModeV2;
 window.resetTimer = resetTimer;
 window.setTimerLimit = setTimerLimit;
-window.applyGamePreset = applyGamePreset;
-window.openPresetModal = openPresetModal;
 
 console.log('✅ Todas as funções foram expostas globalmente.');
