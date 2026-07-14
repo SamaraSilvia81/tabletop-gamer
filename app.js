@@ -167,11 +167,10 @@ const FONTS = [
   { id: 'pixel',     name: 'Pixel',     css: "'Silkscreen', cursive",         preview: 'Aa' },
 ];
 
-let state = { games: [], matches: [], currentMatch: null, editingGameId: null };
+let state = { games: [], matches: [], currentMatch: null };
 const LS = 'tabletop_v4';
 
 // Gera um UUID válido (compatível com a coluna `uuid` do Supabase).
-// Antes os ids eram tipo 'g_'+Date.now(), que não é um UUID e quebrava o insert na nuvem.
 function genId() {
   if (crypto.randomUUID) return crypto.randomUUID();
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -185,8 +184,6 @@ const load = () => {
     const d = JSON.parse(localStorage.getItem(LS) || localStorage.getItem('tabletop_v3') || '{}');
     state.games   = d.games   || [];
     state.matches = d.matches || [];
-    // Partida em andamento (incluindo sala/participantes) também é salva, senão
-    // qualquer reload no meio de uma sala perdia tudo e obrigava a criar sala nova.
     state.currentMatch = d.currentMatch || null;
   } catch(e) {}
 };
@@ -210,11 +207,9 @@ function navTo(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
   document.getElementById(`view-${v}`).classList.add('active');
   document.getElementById('fab-btn').style.display = v === 'library' ? 'grid' : 'none';
-  // Show/hide gameplay elements
+  // Show/hide round trigger
   const isPlay = v === 'play' && state.currentMatch;
-  const statusBar = document.getElementById('game-status-bar');
   const roundTrigger = document.getElementById('round-trigger-fixed');
-  if (statusBar) statusBar.style.display = isPlay ? 'flex' : 'none';
   if (roundTrigger) roundTrigger.style.display = (isPlay && state.currentMatch?.isHost) ? 'block' : 'none';
   if (v === 'settings') { buildThemeGrid('settings-theme-grid'); renderProfile(); }
   window.location.hash = v;
@@ -269,7 +264,6 @@ function getFontCSS(fontId) {
 
 function previewWallpaper() {
   const url = document.getElementById('setup-wallpaper').value.trim();
-  // Não sobrescreve se o campo mostra "(arquivo local)" — o base64 já está em setup.wallpaper
   if (url && url !== '(arquivo local)') {
     setup.wallpaper = url;
   }
@@ -317,13 +311,11 @@ function applyWallpaperPreview(src) {
     const posX = setup.wpPosX ?? 50;
     const posY = setup.wpPosY ?? 50;
     const zoom = setup.wpZoom ?? 100;
-    // Usa background-image idêntico à tela real (play-hero-bg) para que o preview seja fiel
     prev.style.backgroundImage = `url('${src}')`;
     prev.style.backgroundPosition = `${posX}% ${posY}%`;
     prev.style.backgroundSize = zoom === 100 ? 'cover' : `${zoom}%`;
     prev.style.backgroundRepeat = 'no-repeat';
     prev.innerHTML = `<div class="wp-label" style="color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.8);"><i class='ph ph-check'></i> Fundo definido</div>`;
-    // Testa se a imagem é válida; se não, mostra erro
     const testImg = new Image();
     testImg.onerror = () => {
       prev.style.backgroundImage = '';
@@ -454,7 +446,6 @@ function openSetup(gid) {
   if (gid) {
     const g = state.games.find(x => x.id === gid);
     if (g) {
-      // wallpaper corrompido (salvo como string literal) = tratar como vazio
       const savedWallpaper = (g.wallpaper && g.wallpaper !== '(arquivo local)') ? g.wallpaper : '';
       setup = {
         emoji: g.emoji, type: g.type, scoring: g.scoring,
@@ -616,12 +607,10 @@ function renderPlay() {
   const m = state.currentMatch;
   const el = document.getElementById('play-content');
   const empty = document.getElementById('play-empty');
-  const statusBar = document.getElementById('game-status-bar');
   const roundTrigger = document.getElementById('round-trigger-fixed');
   if (!m) {
     empty.style.display='block'; el.style.display='none';
-    statusBar.style.display='none';
-    roundTrigger.style.display='none';
+    if (roundTrigger) roundTrigger.style.display='none';
     return;
   }
   empty.style.display = 'none';
@@ -631,19 +620,6 @@ function renderPlay() {
   const isHost = m.isHost;
   const maxScore = Math.max(...m.scores, 1);
   const leaderName = sorted.length && m.rounds.length > 0 ? sorted[0].name.split(' ')[0] : '—';
-
-  // ── STATUS BAR ──
-  statusBar.style.display = 'flex';
-  statusBar.innerHTML = `
-    <div class="status-left">
-      <div class="status-icon">${getIconSVG(m.emoji, 16)}</div>
-      <span class="status-name">${m.gameName}</span>
-    </div>
-    <div class="status-pills">
-      <span class="s-pill"><i class="ph ph-list-numbers"></i> R${m.rounds.length}</span>
-      ${m.rounds.length > 0 ? `<span class="s-pill s-leader"><i class="ph ph-crown"></i> ${leaderName}</span>` : ''}
-    </div>
-  `;
 
   // ── ROUND TRIGGER ──
   if (isHost) {
@@ -1517,9 +1493,6 @@ try {
 
 // ═══════════════════════════════════════════════
 // SINCRONIZAÇÃO COM A NUVEM (jogos e partidas)
-// Sem login: tudo fica só no localStorage, como sempre foi.
-// Com login: cada mudança local também é gravada no Supabase,
-// e ao logar em um novo device os dados da nuvem são puxados.
 // ═══════════════════════════════════════════════
 let cloudUserId = null;
 let cloudSyncing = false;
@@ -1565,9 +1538,14 @@ function rowToMatch(r) {
 }
 
 async function cloudUpsertGame(g) {
-  if (!sb || !cloudUserId) return;
+  if (!sb || !cloudUserId) {
+    console.warn('cloudUpsertGame ignorado: sem sb ou cloudUserId');
+    return;
+  }
+  console.log('Enviando jogo para nuvem:', g.name);
   const { error } = await sb.from('games').upsert(gameToRow(g, cloudUserId));
   if (error) console.error('Falha ao sincronizar jogo com a nuvem:', error);
+  else console.log('Jogo enviado com sucesso');
 }
 async function cloudDeleteGame(id) {
   if (!sb || !cloudUserId) return;
@@ -1585,10 +1563,7 @@ async function cloudDeleteMatch(id) {
   if (error) console.error('Falha ao excluir partida na nuvem:', error);
 }
 
-// Roda quando o usuário loga (ou já abre o app logado). Busca o que existe na
-// nuvem, sobe o que só existe local (ex: jogos criados offline antes de logar),
-// e deixa local + nuvem com o mesmo conteúdo.
-async function pullCloudData() {
+async function pullCloudData(force = false) {
   if (!sb || !cloudUserId || cloudSyncing) return;
   cloudSyncing = true;
   try {
@@ -1606,14 +1581,18 @@ async function pullCloudData() {
     const cloudGameIds = new Set(cloudGames.map(g => g.id));
     const cloudMatchIds = new Set(cloudMatches.map(m => m.id));
 
-    const onlyLocalGames = state.games.filter(g => !cloudGameIds.has(g.id));
-    const onlyLocalMatches = state.matches.filter(m => !cloudMatchIds.has(m.id));
-    await Promise.all(onlyLocalGames.map(cloudUpsertGame));
-    await Promise.all(onlyLocalMatches.map(cloudUpsertMatch));
-
-    state.games = [...cloudGames, ...onlyLocalGames];
-    state.matches = [...cloudMatches, ...onlyLocalMatches]
-      .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+    if (force) {
+      state.games = cloudGames;
+      state.matches = cloudMatches;
+    } else {
+      const onlyLocalGames = state.games.filter(g => !cloudGameIds.has(g.id));
+      const onlyLocalMatches = state.matches.filter(m => !cloudMatchIds.has(m.id));
+      await Promise.all(onlyLocalGames.map(cloudUpsertGame));
+      await Promise.all(onlyLocalMatches.map(cloudUpsertMatch));
+      state.games = [...cloudGames, ...onlyLocalGames];
+      state.matches = [...cloudMatches, ...onlyLocalMatches]
+        .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+    }
     localStorage.setItem(LS, JSON.stringify({ games: state.games, matches: state.matches }));
     renderLibrary(); renderHistory();
     toast('Dados sincronizados com a nuvem ✓');
@@ -1709,7 +1688,7 @@ if (sb) {
       if (_cameFromOAuth) toast('Login realizado!');
       const splash = document.getElementById('splash');
       if (splash && splash.style.display !== 'none') enterApp();
-      pullCloudData();
+      pullCloudData(true);
     }
     if (event === 'SIGNED_OUT') {
       cloudUserId = null;
@@ -1718,7 +1697,7 @@ if (sb) {
   });
   // Se o app abrir com uma sessão já ativa (usuário voltou logado), sincroniza também.
   sb.auth.getSession().then(({ data: { session } }) => {
-    if (session?.user) { cloudUserId = session.user.id; pullCloudData(); }
+    if (session?.user) { cloudUserId = session.user.id; pullCloudData(true); }
   });
   updateAuthUI();
 }
@@ -1926,9 +1905,6 @@ if (['library','play','history','settings'].includes(initHash)) {
   const m = state.currentMatch;
   if (m && m.roomCode && !m.ended) {
     subscribeRoom(m.roomCode, !!m.isHost);
-    // Depois de reconectar, pede uma sincronização fresca pra pegar qualquer coisa
-    // que tenha mudado enquanto o app estava fechado (e o host confirma a própria
-    // presença de novo pra quem tiver entrado nesse meio tempo).
     setTimeout(() => {
       roomChannel?.send({ type: 'broadcast', event: 'request-sync', payload: {} });
       if (m.isHost) broadcastState();

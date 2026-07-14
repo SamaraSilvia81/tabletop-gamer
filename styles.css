@@ -1526,73 +1526,6 @@ body::after {
    GAMEPLAY REDESIGN v8
    ══════════════════════════════════════════════════ */
 
-/* ── Game Status Bar ── */
-.game-status-bar {
-  position: sticky;
-  top: 0;
-  z-index: 51;
-  background: var(--text);
-  color: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 7px 14px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  gap: 8px;
-}
-
-.game-status-bar .status-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.game-status-bar .status-icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: var(--primary);
-  display: grid;
-  place-items: center;
-  font-size: 0.8rem;
-  flex-shrink: 0;
-  border: 1.5px solid rgba(255,255,255,0.15);
-}
-
-.game-status-bar .status-name {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
-  font-size: 0.8rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.game-status-bar .status-pills {
-  display: flex;
-  gap: 5px;
-  flex-shrink: 0;
-}
-
-.game-status-bar .s-pill {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  border-radius: 10px;
-  background: rgba(255,255,255,0.1);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.6rem;
-  font-weight: 600;
-}
-
-.game-status-bar .s-pill.s-leader {
-  background: var(--primary);
-  color: var(--text);
-}
-
 /* ── Timer Ring ── */
 .timer-hero {
   display: flex;
@@ -1831,30 +1764,31 @@ body::after {
 .podium-row.p-leader .podium-pts { font-size: 1.5rem; }
 
 /* ── Quick Score (formulas) ── */
-.qscore-section { padding: 0 16px 12px; }
+.qscore-section { padding: 0 16px 16px; }
 
 .qscore-header {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .qscore-dot {
-  width: 7px; height: 7px;
+  width: 8px; height: 8px;
   border-radius: 50%;
   background: var(--secondary);
   animation: qs-pulse 2s infinite;
+  flex-shrink: 0;
 }
 
 @keyframes qs-pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
 
 .qscore-label {
   font-family: 'Fredoka', sans-serif;
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.7px;
+  letter-spacing: 1px;
   color: var(--secondary);
 }
 
@@ -1904,32 +1838,78 @@ body::after {
 
 .formula-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 5px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
 }
 
 .f-btn {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-radius: 9px;
-  border: 1.5px solid var(--secondary);
-  background: var(--secondary-glow);
+  padding: 12px 14px;
+  border-radius: 13px;
+  border: 2px solid var(--secondary);
+  background: var(--surface);
   cursor: pointer;
   transition: all 0.12s;
-  gap: 5px;
+  gap: 8px;
+  box-shadow: 3px 3px 0 var(--secondary);
+  min-height: 68px;
+  position: relative;
+  overflow: hidden;
 }
 
-.f-btn:active { background: var(--secondary); transform: scale(0.96); }
+.f-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--secondary-glow);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.f-btn:active {
+  background: var(--secondary);
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+.f-btn:active::before { opacity: 0; }
 .f-btn:active .f-lbl, .f-btn:active .f-val { color: #fff; }
 
-.f-lbl { font-size: 0.76rem; font-weight: 600; color: var(--text-2); }
-.f-val { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-weight: 700; color: var(--secondary); }
+.f-lbl {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-2);
+  line-height: 1.35;
+  flex: 1;
+}
 
-.f-btn.f-neg { border-color: var(--accent); background: rgba(142,53,66,0.07); }
+.f-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--secondary);
+  align-self: flex-end;
+  line-height: 1;
+}
+
+.f-btn.f-neg {
+  border-color: var(--accent);
+  box-shadow: 3px 3px 0 var(--accent);
+}
+
 .f-btn.f-neg .f-val { color: var(--accent); }
-.f-btn.f-neg:active { background: var(--accent); }
+
+.f-btn.f-neg:active {
+  background: var(--accent);
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+.f-btn.f-neg:active .f-lbl,
+.f-btn.f-neg:active .f-val { color: #fff; }
 
 /* ── Log Section ── */
 .log-section-v2 { padding: 0 16px 12px; }
