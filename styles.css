@@ -1362,13 +1362,45 @@ body::after {
   border: 1.5px solid var(--border);
   margin-bottom: 12px;
   box-shadow: var(--card-shadow-sm, var(--card-shadow));
+  position: relative;
+  overflow: hidden;
+  min-height: 200px;
+  background-size: cover;
+  background-position: center;
 }
-.winner-trophy {
-  font-size: 4rem;
-  animation: trophy-bounce 0.6s ease;
-  display: block;
-  margin-bottom: 12px;
+.winner-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 0;
 }
+.winner-screen > * { position: relative; z-index: 1; }
+.winner-screen .winner-trophy { font-size: 4rem; animation: trophy-bounce 0.6s ease; display: block; margin-bottom: 12px; }
+.winner-screen .winner-eyebrow {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 6px;
+}
+.winner-screen .winner-name {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+.winner-screen .winner-pts {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.8);
+  margin-top: 6px;
+}
+
 @keyframes trophy-bounce {
   0%   { transform: scale(0) rotate(-10deg); }
   50%  { transform: scale(1.2) rotate(5deg); }
@@ -1726,7 +1758,8 @@ body::after {
 }
 
 .podium-avatar-wrap {
-  width: 30px; height: 30px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: grid;
   place-items: center;
