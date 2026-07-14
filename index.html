@@ -310,20 +310,24 @@
       </div>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">Modo de jogo</label>
-      <div class="type-grid" id="team-mode-grid">
-        <div class="type-option selected" data-team="false" onclick="selectTeamMode(this, false)">
-          <span><i class="ph ph-user"></i></span>Individual
-        </div>
-        <div class="type-option" data-team="true" onclick="selectTeamMode(this, true)">
-          <span><i class="ph ph-users"></i></span>Duplas
-        </div>
-        <div class="type-option" data-team="times" onclick="selectTeamMode(this, 'times')">
-          <span><i class="ph ph-users-three"></i></span>Times
-        </div>
-      </div>
+   <div class="form-group">
+    <label class="form-label">Modos de jogo suportados</label>
+    <div class="type-grid" id="team-mode-grid">
+      <label class="type-option selected" data-mode="individual">
+        <input type="checkbox" checked style="display:none;">
+        <span><i class="ph ph-user"></i></span>Individual
+      </label>
+      <label class="type-option" data-mode="duplas">
+        <input type="checkbox" style="display:none;">
+        <span><i class="ph ph-users"></i></span>Duplas
+      </label>
+      <label class="type-option" data-mode="times">
+        <input type="checkbox" style="display:none;">
+        <span><i class="ph ph-users-three"></i></span>Times
+      </label>
     </div>
+    <p class="hint-text">Marque os modos que este jogo pode ter. Na partida, o anfitrião escolhe qual usar.</p>
+  </div>
 
     <div class="form-group">
       <label class="form-label">Pontuação</label>
