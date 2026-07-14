@@ -518,8 +518,15 @@ function saveGame() {
   } else {
     state.games.push(game);
   }
-  save(); renderLibrary(); closeSetup(); SFX.confirm();
+
+  // 🔥 SEMPRE salvar localmente primeiro
+  save();
+  renderLibrary();
+  closeSetup();
+  SFX.confirm();
   toast(state.editingGameId ? 'Jogo atualizado ✓' : 'Jogo criado ✓');
+
+  // Depois, tentar enviar para a nuvem (se logado)
   cloudUpsertGame(game);
 }
 
@@ -552,7 +559,8 @@ function renderLibrary() {
 function deleteGame(id) {
   SFX.remove();
   state.games = state.games.filter(g => g.id !== id);
-  save(); renderLibrary();
+  save();
+  renderLibrary();
   toast('Jogo excluído');
   cloudDeleteGame(id);
 }
@@ -1588,9 +1596,13 @@ async function cloudUpsertGame(g) {
     return;
   }
   console.log('Enviando jogo para nuvem:', g.name);
-  const { error } = await sb.from('games').upsert(gameToRow(g, cloudUserId));
-  if (error) console.error('Falha ao sincronizar jogo com a nuvem:', error);
-  else console.log('Jogo enviado com sucesso');
+  const { error } = await sb.from('games').upsert(gameToRow(g, cloudUserId), { onConflict: 'id' });
+  if (error) {
+    console.error('Falha ao sincronizar jogo com a nuvem:', error);
+    toast('Erro ao salvar na nuvem, mas o jogo está salvo localmente.');
+  } else {
+    console.log('Jogo enviado com sucesso');
+  }
 }
 async function cloudDeleteGame(id) {
   if (!sb || !cloudUserId) return;
@@ -1599,7 +1611,7 @@ async function cloudDeleteGame(id) {
 }
 async function cloudUpsertMatch(m) {
   if (!sb || !cloudUserId) return;
-  const { error } = await sb.from('matches').upsert(matchToRow(m, cloudUserId));
+  const { error } = await sb.from('matches').upsert(matchToRow(m, cloudUserId), { onConflict: 'id' });
   if (error) console.error('Falha ao sincronizar partida com a nuvem:', error);
 }
 async function cloudDeleteMatch(id) {
@@ -1608,10 +1620,12 @@ async function cloudDeleteMatch(id) {
   if (error) console.error('Falha ao excluir partida na nuvem:', error);
 }
 
-async function pullCloudData(force = false) {
+// Função melhorada: mescla dados locais e da nuvem sem perder nada
+async function pullCloudData() {
   if (!sb || !cloudUserId || cloudSyncing) return;
   cloudSyncing = true;
   try {
+    console.log('🔃 Puxando dados da nuvem...');
     const [gamesRes, matchesRes] = await Promise.all([
       sb.from('games').select('*').eq('user_id', cloudUserId),
       sb.from('matches').select('*').eq('user_id', cloudUserId)
@@ -1623,24 +1637,49 @@ async function pullCloudData(force = false) {
     }
     const cloudGames = (gamesRes.data || []).map(rowToGame);
     const cloudMatches = (matchesRes.data || []).map(rowToMatch);
+    console.log(`☁️ Nuvem: ${cloudGames.length} jogos, ${cloudMatches.length} partidas`);
+    console.log(`💻 Local: ${state.games.length} jogos, ${state.matches.length} partidas`);
+
+    // 1. Envia para a nuvem os jogos/partidas locais que ainda não estão lá
+    const localGameIds = new Set(state.games.map(g => g.id));
     const cloudGameIds = new Set(cloudGames.map(g => g.id));
+    const localMatchIds = new Set(state.matches.map(m => m.id));
     const cloudMatchIds = new Set(cloudMatches.map(m => m.id));
 
-    if (force) {
-      state.games = cloudGames;
-      state.matches = cloudMatches;
-    } else {
-      const onlyLocalGames = state.games.filter(g => !cloudGameIds.has(g.id));
-      const onlyLocalMatches = state.matches.filter(m => !cloudMatchIds.has(m.id));
+    // Envia jogos locais que não estão na nuvem
+    const onlyLocalGames = state.games.filter(g => !cloudGameIds.has(g.id));
+    const onlyLocalMatches = state.matches.filter(m => !cloudMatchIds.has(m.id));
+    if (onlyLocalGames.length) {
+      console.log(`⬆️ Enviando ${onlyLocalGames.length} jogos locais para a nuvem...`);
       await Promise.all(onlyLocalGames.map(cloudUpsertGame));
-      await Promise.all(onlyLocalMatches.map(cloudUpsertMatch));
-      state.games = [...cloudGames, ...onlyLocalGames];
-      state.matches = [...cloudMatches, ...onlyLocalMatches]
-        .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
     }
+    if (onlyLocalMatches.length) {
+      console.log(`⬆️ Enviando ${onlyLocalMatches.length} partidas locais para a nuvem...`);
+      await Promise.all(onlyLocalMatches.map(cloudUpsertMatch));
+    }
+
+    // 2. Mescla: dados da nuvem substituem os locais apenas se existirem na nuvem
+    // Mantém os locais que não estão na nuvem (já foram enviados acima)
+    const mergedGames = [...cloudGames];
+    // Adiciona jogos locais que não estão na nuvem (ou que falharam no envio)
+    state.games.forEach(g => {
+      if (!cloudGameIds.has(g.id)) {
+        mergedGames.push(g);
+      }
+    });
+    const mergedMatches = [...cloudMatches];
+    state.matches.forEach(m => {
+      if (!cloudMatchIds.has(m.id)) {
+        mergedMatches.push(m);
+      }
+    });
+
+    state.games = mergedGames;
+    state.matches = mergedMatches.sort((a,b) => new Date(b.startedAt) - new Date(a.startedAt));
     localStorage.setItem(LS, JSON.stringify({ games: state.games, matches: state.matches }));
     renderLibrary(); renderHistory();
     toast('Dados sincronizados com a nuvem ✓');
+    console.log(`✅ Sincronização concluída: ${state.games.length} jogos, ${state.matches.length} partidas`);
   } finally {
     cloudSyncing = false;
   }
@@ -1724,7 +1763,6 @@ async function updateAuthUI() {
 }
 
 if (sb) {
-  // flag: só mostra "Login realizado!" se veio do OAuth agora (não em sessões já existentes)
   const _cameFromOAuth = window.location.hash.includes('access_token');
   sb.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN') {
@@ -1733,23 +1771,18 @@ if (sb) {
       if (_cameFromOAuth) toast('Login realizado!');
       const splash = document.getElementById('splash');
       if (splash && splash.style.display !== 'none') enterApp();
-      // Puxa dados e perfil
-      pullCloudData(true).then(() => {
-        cloudPullPreferences();
-      });
+      // Puxa dados e perfil (merge)
+      pullCloudData().then(() => cloudPullPreferences());
     }
     if (event === 'SIGNED_OUT') {
       cloudUserId = null;
       updateAuthUI();
     }
   });
-  // Se o app abrir com uma sessão já ativa (usuário voltou logado), sincroniza também.
   sb.auth.getSession().then(({ data: { session } }) => {
     if (session?.user) {
       cloudUserId = session.user.id;
-      pullCloudData(true).then(() => {
-        cloudPullPreferences();
-      });
+      pullCloudData().then(() => cloudPullPreferences());
     }
   });
   updateAuthUI();
