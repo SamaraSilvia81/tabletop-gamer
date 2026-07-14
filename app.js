@@ -1528,3 +1528,13 @@ if (['library','play','history','settings'].includes(initHash)) {
 } else {
   navTo('library');
 }
+// Se voltou do OAuth do Google, o access_token vem no hash — entra no app direto sem precisar clicar
+(function checkOAuthRedirect() {
+  if (window.location.hash && window.location.hash.includes('access_token')) {
+    history.replaceState(null, '', window.location.pathname);
+    setTimeout(() => {
+      const splash = document.getElementById('splash');
+      if (splash && splash.style.display !== 'none') enterApp();
+    }, 800);
+  }
+})();
