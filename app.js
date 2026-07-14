@@ -1406,10 +1406,12 @@ async function updateAuthUI() {
 }
 
 if (sb) {
+  // flag: só mostra "Login realizado!" se veio do OAuth agora (não em sessões já existentes)
+  const _cameFromOAuth = window.location.hash.includes('access_token');
   sb.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN') {
       updateAuthUI();
-      toast('Login realizado!');
+      if (_cameFromOAuth) toast('Login realizado!');
       const splash = document.getElementById('splash');
       if (splash && splash.style.display !== 'none') enterApp();
     }
