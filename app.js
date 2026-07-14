@@ -1332,7 +1332,10 @@ try {
 async function loginWithGoogle() {
   if (!sb) { toast('Supabase não disponível'); return; }
   try {
-    const redirectTo = window.location.origin + window.location.pathname;
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const redirectTo = isLocal
+      ? window.location.origin + window.location.pathname + '#library'
+      : 'https://tabletop-gamer.vercel.app/#library';
     const { error } = await sb.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo }
